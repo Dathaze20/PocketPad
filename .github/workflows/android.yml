@@ -5,6 +5,9 @@ on:
     branches: ["**"]
   pull_request:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     name: Build debug APK
@@ -35,3 +38,16 @@ jobs:
         with:
           name: PocketPad-release-aab-unsigned
           path: app/build/outputs/bundle/release/app-release.aab
+
+      # Public, no-login download for phones:
+      # https://github.com/Dathaze20/PocketPad/releases/latest
+      - name: Publish APK to the "latest" release
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp app/build/outputs/apk/debug/app-debug.apk PocketPad.apk
+          gh release delete latest --yes --cleanup-tag || true
+          gh release create latest PocketPad.apk \
+            --title "PocketPad — newest build" \
+            --notes "Auto-built from the newest commit. On your phone: tap PocketPad.apk below, then open the download to install."

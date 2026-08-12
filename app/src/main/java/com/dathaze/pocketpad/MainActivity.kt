@@ -296,11 +296,17 @@ class MainActivity : AppCompatActivity(),
         hidManager.connectTo(device)
     }
 
+    override fun onHomeLongPress() {
+        if (!hidManager.isConnected) makeDiscoverable()
+    }
+
     private fun makeDiscoverable() {
         val intent = Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE)
             .putExtra(BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION, 300)
         try {
             startActivity(intent)
+            controllerView.linkState = ControllerView.LinkState.DISCOVERABLE
+            Toast.makeText(this, R.string.discoverable_hint, Toast.LENGTH_LONG).show()
         } catch (e: SecurityException) {
             Toast.makeText(this, R.string.bt_permission_needed, Toast.LENGTH_LONG).show()
         }
@@ -476,6 +482,7 @@ class MainActivity : AppCompatActivity(),
         }
         statusView.text = getString(R.string.status_connected, name)
         statusView.setTextColor(STATUS_CONNECTED)
+        controllerView.linkState = ControllerView.LinkState.CONNECTED
         device?.let {
             getPreferences(MODE_PRIVATE).edit()
                 .putString(PREF_LAST_DEVICE, it.address)
@@ -486,6 +493,7 @@ class MainActivity : AppCompatActivity(),
     override fun onHidDisconnected() {
         statusView.text = getString(R.string.status_disconnected)
         statusView.setTextColor(STATUS_DIM)
+        controllerView.linkState = ControllerView.LinkState.IDLE
     }
 
     private companion object {

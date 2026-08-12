@@ -8,11 +8,15 @@ import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.Shader
+import android.os.SystemClock
 import android.util.AttributeSet
 import android.view.MotionEvent
 import android.view.View
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import kotlin.math.PI
+import kotlin.math.abs
+import kotlin.math.sin
 import com.dathaze.pocketpad.hid.GamepadState
 import com.dathaze.pocketpad.hid.HidConstants
 import kotlin.math.atan2
@@ -46,10 +50,15 @@ class ControllerView @JvmOverloads constructor(
 
     enum class Skin { PS, SNES, NES, GAMEBOY }
 
+    /** Connection state shown by the halo around the PS/home button. */
+    enum class LinkState { IDLE, DISCOVERABLE, CONNECTED }
+
     interface Listener {
         /** Touch state changed — read [touchState] and send a report. */
         fun onTouchStateChanged()
         fun onOpenSettings()
+        /** PS/home button held for ~0.7 s while not connected. */
+        fun onHomeLongPress()
     }
 
     var listener: Listener? = null
@@ -59,6 +68,14 @@ class ControllerView @JvmOverloads constructor(
 
     /** Haptic feedback engine; intensity is user-configurable. */
     val haptics = Haptics(context)
+
+    /** Drives the halo around the PS/home button. */
+    var linkState: LinkState = LinkState.IDLE
+        set(value) {
+            if (field == value) return
+            field = value
+            invalidate()
+        }
 
     var skin: Skin = Skin.PS
         set(value) {
@@ -98,15 +115,25 @@ class ControllerView @JvmOverloads constructor(
         val buttonIndex: Int,
         var labelColor: Int = textColor,
         var labelScale: Float = 1f,
-        val rimmed: Boolean = false
+        val rimmed: Boolean = false,
+        val isHome: Boolean = false
     ) : Control() {
+        private val longPressRunnable = Runnable {
+            if (linkState != LinkState.CONNECTED) {
+                haptics.press()
+                listener?.onHomeLongPress()
+            }
+        }
+
         override fun onDown(x: Float, y: Float) {
             touchState.setButton(buttonIndex, true)
             haptics.press()
+            if (isHome) postDelayed(longPressRunnable, 700)
             notifyChanged()
         }
 
         override fun onUp() {
+            if (isHome) removeCallbacks(longPressRunnable)
             touchState.setButton(buttonIndex, false)
             notifyChanged()
         }
@@ -116,6 +143,7 @@ class ControllerView @JvmOverloads constructor(
             val tint = if (rimmed) labelColor else accentColor
             // Press animation: the cap sinks slightly and glows.
             val r = if (pressed) radius * 0.93f else radius
+            if (isHome) drawHalo(canvas)
             if (pressed) {
                 glowPaint.color = tint
                 glowPaint.alpha = 80
@@ -140,6 +168,38 @@ class ControllerView @JvmOverloads constructor(
             textPaint.color = labelColor
             textPaint.textSize = r * 0.72f * labelScale
             canvas.drawText(label, cx, cy - (textPaint.ascent() + textPaint.descent()) / 2f, textPaint)
+        }
+
+        /**
+         * Status halo: a dark inner ring with a light outer ring around the
+         * PS/home button. Idle = faint. Pairing mode = pulsing white.
+         * Connected = steady green. Long-press the button to start pairing.
+         */
+        private fun drawHalo(canvas: Canvas) {
+            haloPaint.strokeWidth = radius * 0.09f
+            // Black separator ring so the halo reads on any background.
+            haloPaint.color = Color.BLACK
+            haloPaint.alpha = 150
+            canvas.drawCircle(cx, cy, radius * 1.14f, haloPaint)
+            when (linkState) {
+                LinkState.CONNECTED -> {
+                    haloPaint.color = connectedColor
+                    haloPaint.alpha = 235
+                    canvas.drawCircle(cx, cy, radius * 1.30f, haloPaint)
+                }
+                LinkState.DISCOVERABLE -> {
+                    val t = (SystemClock.uptimeMillis() % 1400L) / 1400f
+                    haloPaint.color = Color.WHITE
+                    haloPaint.alpha = (70 + 170 * abs(sin(t * PI)).toFloat()).toInt()
+                    canvas.drawCircle(cx, cy, radius * 1.30f, haloPaint)
+                    postInvalidateOnAnimation()
+                }
+                LinkState.IDLE -> {
+                    haloPaint.color = Color.WHITE
+                    haloPaint.alpha = 45
+                    canvas.drawCircle(cx, cy, radius * 1.30f, haloPaint)
+                }
+            }
         }
     }
 
@@ -293,6 +353,8 @@ class ControllerView @JvmOverloads constructor(
     }
     private val arrowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
     private val glowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
+    private val haloPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
+    private val connectedColor = Color.parseColor("#35C98A")
     private val highlightPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
         strokeWidth = 4f
@@ -348,7 +410,8 @@ class ControllerView @JvmOverloads constructor(
     private val btnR3 = PadButton("R3", HidConstants.BTN_R3, dimTextColor, 0.9f)
     private val btnShare = PadButton("SHARE", HidConstants.BTN_SHARE, dimTextColor, 0.38f)
     private val btnOptions = PadButton("OPTIONS", HidConstants.BTN_OPTIONS, dimTextColor, 0.3f)
-    private val btnHome = PadButton("PS", HidConstants.BTN_PS, accentColor, 0.8f, rimmed = true)
+    private val btnHome =
+        PadButton("PS", HidConstants.BTN_PS, accentColor, 0.8f, rimmed = true, isHome = true)
     private val gear = GearButton()
 
     private var activeControls: List<Control> = emptyList()
