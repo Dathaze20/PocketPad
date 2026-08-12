@@ -15,17 +15,12 @@ Everything needed to take this project from source code to a live Play Store lis
       -alias pocketpad -keyalg RSA -keysize 2048 -validity 10000
   ```
 - [ ] **Never commit the keystore or its passwords to git** (the `.gitignore` already excludes `*.keystore`).
-- [ ] Add a signing config to `app/build.gradle` (or use Android Studio → *Build → Generate Signed Bundle*), reading passwords from `~/.gradle/gradle.properties` or environment variables:
-  ```groovy
-  signingConfigs {
-      release {
-          storeFile file(POCKETPAD_STORE_FILE)
-          storePassword POCKETPAD_STORE_PASSWORD
-          keyAlias "pocketpad"
-          keyPassword POCKETPAD_KEY_PASSWORD
-      }
-  }
-  buildTypes { release { signingConfig signingConfigs.release } }
+- [ ] The signing config is already wired into `app/build.gradle` — it activates automatically when you add these four lines to `~/.gradle/gradle.properties` (your home folder, **not** the repo):
+  ```properties
+  POCKETPAD_STORE_FILE=/absolute/path/to/pocketpad-upload.keystore
+  POCKETPAD_STORE_PASSWORD=your-store-password
+  POCKETPAD_KEY_ALIAS=pocketpad
+  POCKETPAD_KEY_PASSWORD=your-key-password
   ```
 - [ ] Opt into **Play App Signing** in the console (recommended — Google holds the final signing key, your keystore is just the upload key).
 
@@ -46,7 +41,7 @@ Everything needed to take this project from source code to a live Play Store lis
 
 ## 5. Policy declarations (as of 2026)
 
-- [ ] **Privacy policy URL** — required. PocketPad collects **no data**; a one-page static statement is enough (GitHub Pages works). State: no data collected, no data shared, Bluetooth/USB used only to transmit controller input locally.
+- [ ] **Privacy policy URL** — required. A ready-to-publish policy is included at [`docs/PRIVACY_POLICY.md`](PRIVACY_POLICY.md): enable GitHub Pages (repo Settings → Pages → deploy from branch → `main`, `/docs` folder) and paste the resulting URL into the Play Console.
 - [ ] **Data safety form**: "No data collected", "No data shared". Bluetooth permission is used for core functionality (device pairing/input), not for location.
 - [ ] **Permissions declaration**: `BLUETOOTH_CONNECT` / `BLUETOOTH_ADVERTISE` are runtime permissions with obvious purpose — no special declaration form needed (they are not in the sensitive-permissions list like SMS/location).
 - [ ] **Content rating questionnaire**: utility app, no user content → typically rated *Everyone*.

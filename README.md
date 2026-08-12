@@ -1,14 +1,16 @@
 # PocketPad 🎮
 
-**Turn your Android phone into a real Bluetooth gamepad for your Samsung Smart TV** — with on-screen touch controls *and* passthrough for a PS3 controller plugged into the phone with a USB-C OTG adapter.
+**Turn your Android phone into a real Bluetooth gamepad** for your Smart TV, tablet, another phone, or PC — with on-screen touch controls *and* passthrough for a PS3 controller plugged into the phone with a USB-C OTG adapter.
 
-No app is needed on the TV. PocketPad uses Android's native `BluetoothHidDevice` API to make the phone appear to the TV as a standard Bluetooth HID gamepad — exactly like a store-bought controller. Samsung Tizen TVs (like the UN65U7900F) accept standard HID gamepads out of the box.
+No app is needed on the other device. PocketPad uses Android's native `BluetoothHidDevice` API to make the phone appear as a standard Bluetooth HID gamepad — exactly like a store-bought controller. Samsung Tizen TVs (like the UN65U7900F) accept standard HID gamepads out of the box, and so does anything else that supports Bluetooth controllers — including the emulators running on those devices (RetroArch and friends see PocketPad as a normal gamepad).
 
 ## Features
 
-- **Touch gamepad** — d-pad, △ ○ ✕ □ face buttons, dual analog sticks, L1/L2/R1/R2, L3/R3, Share/PS/Options. Full multitouch, haptic feedback, works in **portrait and landscape**.
-- **Real Bluetooth HID** — the TV sees a genuine gamepad. Works with Tizen game apps, cloud gaming, and emulators running on the TV.
-- **PS3 controller passthrough** — plug a DualShock 3 into the phone via a USB-C OTG adapter and its buttons/sticks are forwarded to the TV. Touch and physical controls work at the same time.
+- **Touch gamepad** — d-pad, △ ○ ✕ □ face buttons, dual analog sticks, L1/L2/R1/R2, L3/R3, Share/Options, and a **central PS/home button** you can press *and hold* just like a real controller. Full multitouch, works in **portrait and landscape**.
+- **Controller styles** — switch skins from the ⚙ menu: **PlayStation (PS4/PS5)**, **Super Nintendo** (X/A/B/Y in SNES colors + L/R + Select/Start), **NES**, and **Game Boy**. Same Bluetooth connection, different pad — perfect for retro emulators.
+- **Strong haptic feedback** — a crisp vibration click on every press (plus ticks when the d-pad direction changes), so the glass feels like buttons. Three levels: Strong / Light / Off.
+- **Connects to anything** — TV, tablet, phone, PC: any Bluetooth HID host. The other device sees a genuine gamepad.
+- **PS3 controller passthrough** — plug a DualShock 3 into the phone via a USB-C OTG adapter and its buttons/sticks are forwarded over Bluetooth. Touch and physical controls work at the same time.
 - **Any Android-recognized controller works too** — controllers that Android exposes as native gamepads (many SNES-style USB pads, Xbox pads, etc.) are forwarded automatically via key/motion events.
 - **Reconnects fast** — remembers the last device and reconnects on launch.
 
@@ -24,6 +26,17 @@ No app is needed on the TV. PocketPad uses Android's native `BluetoothHidDevice`
 2. On the TV: **Settings → Connection → External Device Manager → Input Device Manager → Bluetooth Device List** (on some models: **Settings → Sound → Bluetooth Device List**).
 3. Select the device named after your phone and confirm pairing on both screens.
 4. Done — the status pill at the top shows **Connected**. Next time, use **⚙ → Connect to a paired device** to reconnect instantly.
+
+## First-run test plan
+
+Compilation is verified by CI on every push, but Bluetooth pairing can only be proven on real hardware. First time out, check these in order:
+
+1. Open the app → allow Bluetooth permissions → status pill should read **"Gamepad ready — waiting for TV"**. If it says Bluetooth is off, turn it on and reopen.
+2. Pair from the TV (steps below) → pill turns **"Connected to …"**.
+3. Open a game or the TV's Gaming Hub and press buttons. If the TV pairs but ignores input, try un-pairing and re-pairing from the TV's *Input Device Manager* list specifically (not the audio device list).
+4. For emulators: open the emulator's controller settings and map buttons — PocketPad appears as a standard gamepad.
+
+If any step fails, note exactly what the status pill says — that pinpoints where it broke.
 
 ## Using the PS3 controller
 
@@ -45,7 +58,8 @@ app/src/main/java/com/dathaze/pocketpad/
 ├── usb/
 │   └── Ds3UsbDriver.kt      # Raw USB host driver for the DualShock 3 (OTG)
 └── ui/
-    └── ControllerView.kt    # Multitouch on-screen gamepad (portrait + landscape)
+    ├── ControllerView.kt    # Multitouch on-screen gamepad, 4 skins (portrait + landscape)
+    └── Haptics.kt           # Vibration feedback engine (strong/light/off)
 ```
 
 ## Building

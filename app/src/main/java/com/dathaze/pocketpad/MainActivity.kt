@@ -27,6 +27,7 @@ import com.dathaze.pocketpad.hid.GamepadState
 import com.dathaze.pocketpad.hid.HidConstants
 import com.dathaze.pocketpad.hid.HidGamepadManager
 import com.dathaze.pocketpad.ui.ControllerView
+import com.dathaze.pocketpad.ui.Haptics
 import com.dathaze.pocketpad.usb.Ds3UsbDriver
 import kotlin.math.abs
 import kotlin.math.roundToInt
@@ -61,6 +62,8 @@ class MainActivity : AppCompatActivity(),
 
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         enterImmersiveMode()
+
+        restoreControllerPrefs()
 
         hidManager = HidGamepadManager(this, this)
         ds3Driver = Ds3UsbDriver(this, this)
@@ -150,11 +153,28 @@ class MainActivity : AppCompatActivity(),
 
     // -------------------------------------------------------------- settings
 
+    private fun restoreControllerPrefs() {
+        val prefs = getPreferences(MODE_PRIVATE)
+        controllerView.skin = when (prefs.getString(PREF_SKIN, "PS")) {
+            "SNES" -> ControllerView.Skin.SNES
+            "NES" -> ControllerView.Skin.NES
+            "GAMEBOY" -> ControllerView.Skin.GAMEBOY
+            else -> ControllerView.Skin.PS
+        }
+        controllerView.haptics.level = when (prefs.getString(PREF_HAPTICS, "STRONG")) {
+            "OFF" -> Haptics.Level.OFF
+            "LIGHT" -> Haptics.Level.LIGHT
+            else -> Haptics.Level.STRONG
+        }
+    }
+
     @SuppressLint("MissingPermission")
     override fun onOpenSettings() {
         val items = arrayOf(
             getString(R.string.action_connect_paired),
             getString(R.string.action_discoverable),
+            getString(R.string.action_skin),
+            getString(R.string.action_haptics),
             getString(R.string.action_bt_settings),
             getString(R.string.action_disconnect),
             getString(R.string.action_help)
@@ -165,10 +185,70 @@ class MainActivity : AppCompatActivity(),
                 when (which) {
                     0 -> showPairedDevicePicker()
                     1 -> makeDiscoverable()
-                    2 -> startActivity(Intent(android.provider.Settings.ACTION_BLUETOOTH_SETTINGS))
-                    3 -> hidManager.disconnect()
-                    4 -> showHelp()
+                    2 -> showSkinPicker()
+                    3 -> showHapticsPicker()
+                    4 -> startActivity(Intent(android.provider.Settings.ACTION_BLUETOOTH_SETTINGS))
+                    5 -> hidManager.disconnect()
+                    6 -> showHelp()
                 }
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    private fun showSkinPicker() {
+        val skins = arrayOf(
+            getString(R.string.skin_ps),
+            getString(R.string.skin_snes),
+            getString(R.string.skin_nes),
+            getString(R.string.skin_gameboy)
+        )
+        val current = when (controllerView.skin) {
+            ControllerView.Skin.PS -> 0
+            ControllerView.Skin.SNES -> 1
+            ControllerView.Skin.NES -> 2
+            ControllerView.Skin.GAMEBOY -> 3
+        }
+        AlertDialog.Builder(this)
+            .setTitle(R.string.action_skin)
+            .setSingleChoiceItems(skins, current) { dialog, which ->
+                val (skin, key) = when (which) {
+                    1 -> ControllerView.Skin.SNES to "SNES"
+                    2 -> ControllerView.Skin.NES to "NES"
+                    3 -> ControllerView.Skin.GAMEBOY to "GAMEBOY"
+                    else -> ControllerView.Skin.PS to "PS"
+                }
+                controllerView.skin = skin
+                getPreferences(MODE_PRIVATE).edit().putString(PREF_SKIN, key).apply()
+                dialog.dismiss()
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    private fun showHapticsPicker() {
+        val levels = arrayOf(
+            getString(R.string.haptics_strong),
+            getString(R.string.haptics_light),
+            getString(R.string.haptics_off)
+        )
+        val current = when (controllerView.haptics.level) {
+            Haptics.Level.STRONG -> 0
+            Haptics.Level.LIGHT -> 1
+            Haptics.Level.OFF -> 2
+        }
+        AlertDialog.Builder(this)
+            .setTitle(R.string.action_haptics)
+            .setSingleChoiceItems(levels, current) { dialog, which ->
+                val (level, key) = when (which) {
+                    1 -> Haptics.Level.LIGHT to "LIGHT"
+                    2 -> Haptics.Level.OFF to "OFF"
+                    else -> Haptics.Level.STRONG to "STRONG"
+                }
+                controllerView.haptics.level = level
+                getPreferences(MODE_PRIVATE).edit().putString(PREF_HAPTICS, key).apply()
+                controllerView.haptics.press()
+                dialog.dismiss()
             }
             .setNegativeButton(android.R.string.cancel, null)
             .show()
@@ -394,5 +474,7 @@ class MainActivity : AppCompatActivity(),
     private companion object {
         const val REQUEST_BLUETOOTH = 101
         const val PREF_LAST_DEVICE = "last_device_address"
+        const val PREF_SKIN = "controller_skin"
+        const val PREF_HAPTICS = "haptics_level"
     }
 }

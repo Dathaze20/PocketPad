@@ -21,11 +21,17 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Build
-        run: ./gradlew --no-daemon assembleDebug
+      - name: Build debug APK and release bundle
+        run: ./gradlew --no-daemon assembleDebug bundleRelease
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
           name: PocketPad-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Upload release bundle (unsigned)
+        uses: actions/upload-artifact@v4
+        with:
+          name: PocketPad-release-aab-unsigned
+          path: app/build/outputs/bundle/release/app-release.aab
