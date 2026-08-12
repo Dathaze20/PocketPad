@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.PocketPad" parent="Theme.AppCompat.NoActionBar">
+        <item name="android:windowBackground">@color/pp_background</item>
+        <item name="android:statusBarColor">@color/pp_background</item>
+        <item name="android:navigationBarColor">@color/pp_background</item>
+        <item name="colorAccent">@color/pp_accent</item>
+        <item name="android:colorBackground">@color/pp_background</item>
+    </style>
+</resources>

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="pp_background">#FF101118</color>
+    <color name="pp_surface">#FF1C1E2A</color>
+    <color name="pp_outline">#FF3A3D52</color>
+    <color name="pp_control">#FF262939</color>
+    <color name="pp_control_pressed">#FF4A517A</color>
+    <color name="pp_text">#FFE8E9F0</color>
+    <color name="pp_text_dim">#FF8A8FA8</color>
+    <color name="pp_accent">#FF6C79FF</color>
+    <color name="pp_triangle">#FF2ECC71</color>
+    <color name="pp_circle">#FFE74C3C</color>
+    <color name="pp_cross">#FF3498DB</color>
+    <color name="pp_square">#FFE78FB3</color>
+    <color name="ic_launcher_background">#FF1A1B2E</color>
+</resources>

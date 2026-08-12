@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Gamepad body (stadium shape) -->
+    <path
+        android:fillColor="#6C79FF"
+        android:pathData="M36,38 h36 a16,16 0 0 1 16,16 a16,16 0 0 1 -16,16 h-36 a16,16 0 0 1 -16,-16 a16,16 0 0 1 16,-16 z" />
+    <!-- D-pad cross -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M33,46 h6 v5 h5 v6 h-5 v5 h-6 v-5 h-5 v-6 h5 z" />
+    <!-- Face buttons (two dots) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M70,48 m-3.5,0 a3.5,3.5 0 1 0 7,0 a3.5,3.5 0 1 0 -7,0" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M78,58 m-3.5,0 a3.5,3.5 0 1 0 7,0 a3.5,3.5 0 1 0 -7,0" />
+</vector>

@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">PocketPad</string>
+    <string name="status_idle">Not connected — tap the gear to connect to your TV</string>
+    <string name="status_registering">Registering gamepad…</string>
+    <string name="status_registered">Gamepad ready — waiting for TV</string>
+    <string name="status_connecting">Connecting to %1$s…</string>
+    <string name="status_connected">Connected to %1$s</string>
+    <string name="status_disconnected">Disconnected</string>
+    <string name="settings_title">PocketPad</string>
+    <string name="action_connect_paired">Connect to a paired device…</string>
+    <string name="action_discoverable">Make phone discoverable (pair from TV)</string>
+    <string name="action_bt_settings">Open Bluetooth settings</string>
+    <string name="action_disconnect">Disconnect</string>
+    <string name="action_help">How to pair with my TV</string>
+    <string name="help_text">1. On the TV: Settings → Connection → External Device Manager → Input Device Manager → Bluetooth Device List (or Settings → Sound → Bluetooth Device List on some models).\n\n2. In PocketPad: tap “Make phone discoverable”.\n\n3. On the TV, select the device named after your phone and confirm pairing on both screens.\n\n4. Once paired, the TV connects to PocketPad as a gamepad. Next time, use “Connect to a paired device” to reconnect instantly.\n\nPS3 controller: plug it into the phone with a USB‑C OTG adapter. PocketPad will detect it automatically and forward its buttons and sticks to the TV alongside the touch controls.</string>
+    <string name="no_paired_devices">No paired devices yet. Pair with your TV first (Make phone discoverable, then pair from the TV).</string>
+    <string name="bt_permission_needed">Bluetooth permission is required so PocketPad can act as a gamepad. Please allow it.</string>
+    <string name="ds3_connected">PS3 controller connected</string>
+    <string name="ds3_disconnected">PS3 controller disconnected</string>
+</resources>

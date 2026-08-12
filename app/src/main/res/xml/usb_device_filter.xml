@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Sony DualShock 3 / SIXAXIS (PS3 controller) over USB:
+         vendor-id 1356 = 0x054C (Sony), product-id 616 = 0x0268 (DS3) -->
+    <usb-device vendor-id="1356" product-id="616" />
+</resources>
