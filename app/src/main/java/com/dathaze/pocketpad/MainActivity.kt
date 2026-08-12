@@ -464,6 +464,7 @@ class MainActivity : AppCompatActivity(),
 
     override fun onHidStatus(message: String) {
         statusView.text = message
+        statusView.setTextColor(STATUS_DIM)
     }
 
     @SuppressLint("MissingPermission")
@@ -474,6 +475,7 @@ class MainActivity : AppCompatActivity(),
             device?.address ?: "TV"
         }
         statusView.text = getString(R.string.status_connected, name)
+        statusView.setTextColor(STATUS_CONNECTED)
         device?.let {
             getPreferences(MODE_PRIVATE).edit()
                 .putString(PREF_LAST_DEVICE, it.address)
@@ -483,6 +485,7 @@ class MainActivity : AppCompatActivity(),
 
     override fun onHidDisconnected() {
         statusView.text = getString(R.string.status_disconnected)
+        statusView.setTextColor(STATUS_DIM)
     }
 
     private companion object {
@@ -490,5 +493,7 @@ class MainActivity : AppCompatActivity(),
         const val PREF_LAST_DEVICE = "last_device_address"
         const val PREF_SKIN = "controller_skin"
         const val PREF_HAPTICS = "haptics_level"
+        const val STATUS_CONNECTED = 0xFF35C98A.toInt()
+        const val STATUS_DIM = 0xFF8A8FA8.toInt()
     }
 }

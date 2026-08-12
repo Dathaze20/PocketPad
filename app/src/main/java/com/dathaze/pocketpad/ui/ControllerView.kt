@@ -4,8 +4,10 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.Path
+import android.graphics.Shader
 import android.util.AttributeSet
 import android.view.MotionEvent
 import android.view.View
@@ -95,7 +97,8 @@ class ControllerView @JvmOverloads constructor(
         var label: String,
         val buttonIndex: Int,
         var labelColor: Int = textColor,
-        var labelScale: Float = 1f
+        var labelScale: Float = 1f,
+        val rimmed: Boolean = false
     ) : Control() {
         override fun onDown(x: Float, y: Float) {
             touchState.setButton(buttonIndex, true)
@@ -109,16 +112,22 @@ class ControllerView @JvmOverloads constructor(
         }
 
         override fun draw(canvas: Canvas) {
+            // Colored rim buttons (face + home) glow in their own color.
+            val tint = if (rimmed) labelColor else accentColor
             // Press animation: the cap sinks slightly and glows.
             val r = if (pressed) radius * 0.93f else radius
             if (pressed) {
-                glowPaint.color = accentColor
-                glowPaint.alpha = 70
+                glowPaint.color = tint
+                glowPaint.alpha = 80
                 canvas.drawCircle(cx, cy, radius * 1.12f, glowPaint)
             }
             fillPaint.color = if (pressed) controlPressedColor else controlColor
             canvas.drawCircle(cx, cy, r, fillPaint)
-            strokePaint.color = if (pressed) accentColor else outlineColor
+            strokePaint.color = when {
+                pressed -> tint
+                rimmed -> withAlpha(labelColor, 150)
+                else -> outlineColor
+            }
             canvas.drawCircle(cx, cy, r, strokePaint)
             // Soft top light so buttons read as raised caps.
             if (!pressed) {
@@ -179,7 +188,7 @@ class ControllerView @JvmOverloads constructor(
             canvas.drawRoundRect(cx - arm, cy - len, cx + arm, cy + len, arm * 0.5f, arm * 0.5f, fillPaint)
             canvas.drawRoundRect(cx - len, cy - arm, cx + len, cy + arm, arm * 0.5f, arm * 0.5f, fillPaint)
             // Direction arrows
-            arrowPaint.color = if (pressed) textColor else dimTextColor
+            arrowPaint.color = if (pressed) textColor else dpadArrowColor
             drawArrow(canvas, cx, cy - len * 0.72f, radius * 0.16f, 0f)
             drawArrow(canvas, cx + len * 0.72f, cy, radius * 0.16f, 90f)
             drawArrow(canvas, cx, cy + len * 0.72f, radius * 0.16f, 180f)
@@ -291,8 +300,12 @@ class ControllerView @JvmOverloads constructor(
     }
     private val arrowPath = Path()
 
-    private val backgroundColor = Color.parseColor("#101118")
-    private val gbBackgroundColor = Color.parseColor("#16211A")
+    // Background gradients: deep navy fading to indigo (Game Boy skin goes green).
+    private val bgTop = Color.parseColor("#0C0D16")
+    private val bgBottom = Color.parseColor("#1A1E33")
+    private val gbBgTop = Color.parseColor("#131F18")
+    private val gbBgBottom = Color.parseColor("#20301F")
+    private val dpadArrowColor = Color.parseColor("#A9AEC6")
     private val surfaceColor = Color.parseColor("#1C1E2A")
     private val outlineColor = Color.parseColor("#3A3D52")
     private val controlColor = Color.parseColor("#262939")
@@ -323,10 +336,10 @@ class ControllerView @JvmOverloads constructor(
     private val dpad = Dpad()
     private val leftStick = Stick(isLeft = true)
     private val rightStick = Stick(isLeft = false)
-    private val faceBottom = PadButton("✕", HidConstants.BTN_CROSS, psCrossColor)
-    private val faceRight = PadButton("○", HidConstants.BTN_CIRCLE, psCircleColor)
-    private val faceLeft = PadButton("□", HidConstants.BTN_SQUARE, psSquareColor)
-    private val faceTop = PadButton("△", HidConstants.BTN_TRIANGLE, psTriangleColor)
+    private val faceBottom = PadButton("✕", HidConstants.BTN_CROSS, psCrossColor, rimmed = true)
+    private val faceRight = PadButton("○", HidConstants.BTN_CIRCLE, psCircleColor, rimmed = true)
+    private val faceLeft = PadButton("□", HidConstants.BTN_SQUARE, psSquareColor, rimmed = true)
+    private val faceTop = PadButton("△", HidConstants.BTN_TRIANGLE, psTriangleColor, rimmed = true)
     private val btnL1 = PadButton("L1", HidConstants.BTN_L1)
     private val btnL2 = PadButton("L2", HidConstants.BTN_L2)
     private val btnR1 = PadButton("R1", HidConstants.BTN_R1)
@@ -335,7 +348,7 @@ class ControllerView @JvmOverloads constructor(
     private val btnR3 = PadButton("R3", HidConstants.BTN_R3, dimTextColor, 0.9f)
     private val btnShare = PadButton("SHARE", HidConstants.BTN_SHARE, dimTextColor, 0.38f)
     private val btnOptions = PadButton("OPTIONS", HidConstants.BTN_OPTIONS, dimTextColor, 0.3f)
-    private val btnHome = PadButton("PS", HidConstants.BTN_PS, accentColor, 0.8f)
+    private val btnHome = PadButton("PS", HidConstants.BTN_PS, accentColor, 0.8f, rimmed = true)
     private val gear = GearButton()
 
     private var activeControls: List<Control> = emptyList()
@@ -571,10 +584,29 @@ class ControllerView @JvmOverloads constructor(
 
     // --------------------------------------------------------------- drawing
 
+    private val bgPaint = Paint()
+    private var bgShaderSkin: Skin? = null
+    private var bgShaderHeight = 0
+
+    private fun ensureBackground() {
+        if (bgShaderSkin == skin && bgShaderHeight == height) return
+        val top = if (skin == Skin.GAMEBOY) gbBgTop else bgTop
+        val bottom = if (skin == Skin.GAMEBOY) gbBgBottom else bgBottom
+        bgPaint.shader = LinearGradient(
+            0f, 0f, 0f, height.toFloat(), top, bottom, Shader.TileMode.CLAMP
+        )
+        bgShaderSkin = skin
+        bgShaderHeight = height
+    }
+
     override fun onDraw(canvas: Canvas) {
-        canvas.drawColor(if (skin == Skin.GAMEBOY) gbBackgroundColor else backgroundColor)
+        ensureBackground()
+        canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), bgPaint)
         for (control in activeControls) control.draw(canvas)
     }
+
+    private fun withAlpha(color: Int, alpha: Int): Int =
+        (color and 0x00FFFFFF) or (alpha shl 24)
 
     private fun drawArrow(canvas: Canvas, x: Float, y: Float, size: Float, rotation: Float) {
         arrowPath.reset()
