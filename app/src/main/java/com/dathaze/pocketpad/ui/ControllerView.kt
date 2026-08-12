@@ -171,35 +171,40 @@ class ControllerView @JvmOverloads constructor(
         }
 
         /**
-         * Status halo: a dark inner ring with a light outer ring around the
-         * PS/home button. Idle = faint. Pairing mode = pulsing white.
-         * Connected = steady green. Long-press the button to start pairing.
+         * Neon status halo around the PS/home button, like a controller's
+         * light ring: faint when idle, pulsing electric cyan while the phone
+         * is discoverable, steady neon green once connected. A dark separator
+         * ring underneath keeps it readable on any background.
          */
         private fun drawHalo(canvas: Canvas) {
             haloPaint.strokeWidth = radius * 0.09f
-            // Black separator ring so the halo reads on any background.
             haloPaint.color = Color.BLACK
             haloPaint.alpha = 150
             canvas.drawCircle(cx, cy, radius * 1.14f, haloPaint)
             when (linkState) {
-                LinkState.CONNECTED -> {
-                    haloPaint.color = connectedColor
-                    haloPaint.alpha = 235
-                    canvas.drawCircle(cx, cy, radius * 1.30f, haloPaint)
-                }
+                LinkState.CONNECTED -> neonRing(canvas, neonGreen, 1f)
                 LinkState.DISCOVERABLE -> {
                     val t = (SystemClock.uptimeMillis() % 1400L) / 1400f
-                    haloPaint.color = Color.WHITE
-                    haloPaint.alpha = (70 + 170 * abs(sin(t * PI)).toFloat()).toInt()
-                    canvas.drawCircle(cx, cy, radius * 1.30f, haloPaint)
+                    neonRing(canvas, neonCyan, 0.35f + 0.65f * abs(sin(t * PI)).toFloat())
                     postInvalidateOnAnimation()
                 }
-                LinkState.IDLE -> {
-                    haloPaint.color = Color.WHITE
-                    haloPaint.alpha = 45
-                    canvas.drawCircle(cx, cy, radius * 1.30f, haloPaint)
-                }
+                LinkState.IDLE -> neonRing(canvas, Color.WHITE, 0.16f)
             }
+        }
+
+        /** Three concentric strokes with alpha falloff = a neon glow. */
+        private fun neonRing(canvas: Canvas, color: Int, intensity: Float) {
+            val r = radius * 1.30f
+            haloPaint.color = color
+            haloPaint.strokeWidth = radius * 0.34f      // wide outer bloom
+            haloPaint.alpha = (34 * intensity).toInt()
+            canvas.drawCircle(cx, cy, r, haloPaint)
+            haloPaint.strokeWidth = radius * 0.18f      // mid glow
+            haloPaint.alpha = (90 * intensity).toInt()
+            canvas.drawCircle(cx, cy, r, haloPaint)
+            haloPaint.strokeWidth = radius * 0.07f      // bright core
+            haloPaint.alpha = (255 * intensity).toInt()
+            canvas.drawCircle(cx, cy, r, haloPaint)
         }
     }
 
@@ -354,7 +359,8 @@ class ControllerView @JvmOverloads constructor(
     private val arrowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
     private val glowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
     private val haloPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
-    private val connectedColor = Color.parseColor("#35C98A")
+    private val neonCyan = Color.parseColor("#2BE4FF")
+    private val neonGreen = Color.parseColor("#3BFFA8")
     private val highlightPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
         strokeWidth = 4f

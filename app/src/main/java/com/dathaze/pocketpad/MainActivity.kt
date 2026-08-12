@@ -16,6 +16,7 @@ import android.view.MotionEvent
 import android.view.WindowManager
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
@@ -326,20 +327,17 @@ class MainActivity : AppCompatActivity(),
             // Only light the pairing halo once the system confirms the phone
             // really is discoverable — otherwise it lies when the user
             // dismisses the system prompt.
-            startActivityForResult(intent, REQUEST_DISCOVERABLE)
+            discoverableLauncher.launch(intent)
         } catch (e: SecurityException) {
             Toast.makeText(this, R.string.bt_permission_needed, Toast.LENGTH_LONG).show()
         }
     }
 
-    @Deprecated("Simple one-shot result; fine for this single prompt.")
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        @Suppress("DEPRECATION")
-        super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode != REQUEST_DISCOVERABLE) return
-        // A granted request returns the discoverable duration in seconds;
-        // RESULT_CANCELED (0) means the user declined.
-        if (resultCode > 0) {
+    /** A granted request returns the discoverable duration; 0 = declined. */
+    private val discoverableLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode > 0) {
             controllerView.linkState = ControllerView.LinkState.DISCOVERABLE
             statusView.text = getString(R.string.status_discoverable)
             Toast.makeText(this, R.string.discoverable_hint, Toast.LENGTH_LONG).show()
@@ -520,8 +518,17 @@ class MainActivity : AppCompatActivity(),
 
     // ------------------------------------------------------------ HID events
 
-    override fun onHidStatus(message: String) {
-        statusView.text = message
+    override fun onHidStatus(status: HidGamepadManager.HidStatus, deviceName: String?) {
+        statusView.text = when (status) {
+            HidGamepadManager.HidStatus.BLUETOOTH_OFF -> getString(R.string.status_bt_off)
+            HidGamepadManager.HidStatus.REGISTERING -> getString(R.string.status_registering)
+            HidGamepadManager.HidStatus.READY -> getString(R.string.status_registered)
+            HidGamepadManager.HidStatus.CONNECTING ->
+                getString(R.string.status_connecting, deviceName ?: "…")
+            HidGamepadManager.HidStatus.UNREGISTERED -> getString(R.string.status_unregistered)
+            HidGamepadManager.HidStatus.PERMISSION_MISSING ->
+                getString(R.string.bt_permission_needed)
+        }
         statusView.setTextColor(STATUS_DIM)
     }
 
@@ -550,7 +557,6 @@ class MainActivity : AppCompatActivity(),
 
     private companion object {
         const val REQUEST_BLUETOOTH = 101
-        const val REQUEST_DISCOVERABLE = 102
         const val PREF_TV_NAV = "tv_navigation"
         const val PREF_LAST_DEVICE = "last_device_address"
         const val PREF_SKIN = "controller_skin"

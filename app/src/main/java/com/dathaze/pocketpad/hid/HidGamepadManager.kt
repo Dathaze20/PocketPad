@@ -29,8 +29,18 @@ import java.util.concurrent.Executors
 @SuppressLint("MissingPermission")
 class HidGamepadManager(private val context: Context, private val listener: Listener) {
 
+    /** Typed connection lifecycle events; the UI maps these to localized text. */
+    enum class HidStatus {
+        BLUETOOTH_OFF,
+        REGISTERING,
+        READY,
+        CONNECTING,
+        UNREGISTERED,
+        PERMISSION_MISSING
+    }
+
     interface Listener {
-        fun onHidStatus(message: String)
+        fun onHidStatus(status: HidStatus, deviceName: String?)
         fun onHidConnected(device: BluetoothDevice?)
         fun onHidDisconnected()
     }
@@ -56,7 +66,7 @@ class HidGamepadManager(private val context: Context, private val listener: List
         adapter = manager.adapter
         val bt = adapter
         if (bt == null || !bt.isEnabled) {
-            post { listener.onHidStatus("Bluetooth is off — turn it on and reopen the app") }
+            post { listener.onHidStatus(HidStatus.BLUETOOTH_OFF, null) }
             return
         }
         started = true
@@ -90,11 +100,11 @@ class HidGamepadManager(private val context: Context, private val listener: List
     fun connectTo(device: BluetoothDevice) {
         val proxy = hidDevice
         if (proxy != null && registered) {
-            post { listener.onHidStatus("Connecting to ${safeName(device)}…") }
+            post { listener.onHidStatus(HidStatus.CONNECTING, safeName(device)) }
             try {
                 proxy.connect(device)
             } catch (_: SecurityException) {
-                post { listener.onHidStatus("Bluetooth permission missing") }
+                post { listener.onHidStatus(HidStatus.PERMISSION_MISSING, null) }
             }
         } else {
             // Connect as soon as registration completes.
@@ -149,7 +159,7 @@ class HidGamepadManager(private val context: Context, private val listener: List
         override fun onServiceConnected(profile: Int, proxy: BluetoothProfile) {
             if (profile != BluetoothProfile.HID_DEVICE) return
             hidDevice = proxy as BluetoothHidDevice
-            post { listener.onHidStatus("Registering gamepad…") }
+            post { listener.onHidStatus(HidStatus.REGISTERING, null) }
             val sdp = BluetoothHidDeviceAppSdpSettings(
                 "PocketPad Controller",
                 "Wireless Controller",
@@ -166,7 +176,7 @@ class HidGamepadManager(private val context: Context, private val listener: List
             try {
                 proxy.registerApp(sdp, null, qos, executor, hidCallback)
             } catch (_: SecurityException) {
-                post { listener.onHidStatus("Bluetooth permission missing") }
+                post { listener.onHidStatus(HidStatus.PERMISSION_MISSING, null) }
             }
         }
 
@@ -183,7 +193,7 @@ class HidGamepadManager(private val context: Context, private val listener: List
         override fun onAppStatusChanged(pluggedDevice: BluetoothDevice?, isRegistered: Boolean) {
             registered = isRegistered
             if (isRegistered) {
-                post { listener.onHidStatus("Gamepad ready — waiting for TV") }
+                post { listener.onHidStatus(HidStatus.READY, null) }
                 val pending = pendingConnect
                 pendingConnect = null
                 if (pending != null) {
@@ -192,7 +202,7 @@ class HidGamepadManager(private val context: Context, private val listener: List
                     connectTo(pluggedDevice)
                 }
             } else {
-                post { listener.onHidStatus("Gamepad unregistered") }
+                post { listener.onHidStatus(HidStatus.UNREGISTERED, null) }
             }
         }
 
@@ -203,7 +213,7 @@ class HidGamepadManager(private val context: Context, private val listener: List
                     post { listener.onHidConnected(device) }
                 }
                 BluetoothProfile.STATE_CONNECTING ->
-                    post { listener.onHidStatus("Connecting to ${safeName(device)}…") }
+                    post { listener.onHidStatus(HidStatus.CONNECTING, safeName(device)) }
                 BluetoothProfile.STATE_DISCONNECTED -> {
                     if (connectedDevice == device) connectedDevice = null
                     lastReport = null
