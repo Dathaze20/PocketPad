@@ -45,6 +45,7 @@ class HidGamepadManager(private val context: Context, private val listener: List
     private var pendingConnect: BluetoothDevice? = null
     private var started = false
     private var lastReport: ByteArray? = null
+    private var lastKey: Byte = HidConstants.KEY_NONE
 
     val isConnected: Boolean get() = connectedDevice != null
     val currentDevice: BluetoothDevice? get() = connectedDevice
@@ -127,16 +128,33 @@ class HidGamepadManager(private val context: Context, private val listener: List
         }
     }
 
+    /**
+     * Send a keyboard key (or [HidConstants.KEY_NONE] to release) so the pad
+     * can drive TV menus. Repeats are suppressed like gamepad reports.
+     */
+    fun sendKey(key: Byte) {
+        val proxy = hidDevice ?: return
+        val device = connectedDevice ?: return
+        if (key == lastKey) return
+        try {
+            proxy.sendReport(
+                device, HidConstants.REPORT_ID_KEYBOARD, HidConstants.keyboardReport(key)
+            )
+            lastKey = key
+        } catch (_: SecurityException) {
+        }
+    }
+
     private val serviceListener = object : BluetoothProfile.ServiceListener {
         override fun onServiceConnected(profile: Int, proxy: BluetoothProfile) {
             if (profile != BluetoothProfile.HID_DEVICE) return
             hidDevice = proxy as BluetoothHidDevice
             post { listener.onHidStatus("Registering gamepad…") }
             val sdp = BluetoothHidDeviceAppSdpSettings(
-                "PocketPad Gamepad",
-                "Phone touch + USB controller bridge",
-                "Dathaze20",
-                SUBCLASS_GAMEPAD,
+                "PocketPad Controller",
+                "Wireless Controller",
+                "PocketPad",
+                SUBCLASS,
                 HidConstants.REPORT_DESCRIPTOR
             )
             // Ask the host for a low-latency link (~11 ms latency budget),
@@ -189,6 +207,7 @@ class HidGamepadManager(private val context: Context, private val listener: List
                 BluetoothProfile.STATE_DISCONNECTED -> {
                     if (connectedDevice == device) connectedDevice = null
                     lastReport = null
+                    lastKey = HidConstants.KEY_NONE
                     post { listener.onHidDisconnected() }
                 }
             }
@@ -222,7 +241,14 @@ class HidGamepadManager(private val context: Context, private val listener: List
     }
 
     private companion object {
-        // Bluetooth Class of Device minor class: gamepad.
-        const val SUBCLASS_GAMEPAD: Byte = 0x08
+        /**
+         * HID device subclass advertised over SDP. Hosts — TVs especially —
+         * filter their "input device" lists by this byte, so it must be one of
+         * the values the Bluetooth HID profile defines. COMBO (keyboard+pointer
+         * capable) is what off-the-shelf controllers and TV remotes report, and
+         * it is what Samsung's Input Device Manager expects to see; a bare
+         * gamepad subclass is skipped by some firmware.
+         */
+        const val SUBCLASS: Byte = BluetoothHidDevice.SUBCLASS1_COMBO
     }
 }

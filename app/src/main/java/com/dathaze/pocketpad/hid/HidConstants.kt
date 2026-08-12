@@ -13,6 +13,17 @@ package com.dathaze.pocketpad.hid
 object HidConstants {
 
     const val REPORT_ID: Int = 1
+    const val REPORT_ID_KEYBOARD: Int = 2
+
+    // USB HID keyboard usage codes, used for TV menu navigation.
+    const val KEY_NONE: Byte = 0x00
+    const val KEY_ENTER: Byte = 0x28
+    const val KEY_ESCAPE: Byte = 0x29
+    const val KEY_BACKSPACE: Byte = 0x2A
+    const val KEY_RIGHT: Byte = 0x4F
+    const val KEY_LEFT: Byte = 0x50
+    const val KEY_DOWN: Byte = 0x51
+    const val KEY_UP: Byte = 0x52
 
     // Bit indices into the 16-bit button field (PS-style layout).
     const val BTN_CROSS = 0
@@ -71,6 +82,39 @@ object HidConstants {
         0x75.toByte(), 0x08.toByte(),                 //   Report Size (8)
         0x95.toByte(), 0x04.toByte(),                 //   Report Count (4)
         0x81.toByte(), 0x02.toByte(),                 //   Input (Data, Variable, Absolute)
+        0xC0.toByte(),                                // End Collection
+
+        // ---- Keyboard collection (report id 2) -------------------------
+        // Hosts that ignore a bare gamepad still always accept a keyboard,
+        // so this both gets PocketPad listed in TV "input device" menus and
+        // lets the d-pad drive TV menus as arrow keys.
+        0x05.toByte(), 0x01.toByte(),                 // Usage Page (Generic Desktop)
+        0x09.toByte(), 0x06.toByte(),                 // Usage (Keyboard)
+        0xA1.toByte(), 0x01.toByte(),                 // Collection (Application)
+        0x85.toByte(), REPORT_ID_KEYBOARD.toByte(),   //   Report ID (2)
+        0x05.toByte(), 0x07.toByte(),                 //   Usage Page (Keyboard)
+        0x19.toByte(), 0xE0.toByte(),                 //   Usage Minimum (Left Control)
+        0x29.toByte(), 0xE7.toByte(),                 //   Usage Maximum (Right GUI)
+        0x15.toByte(), 0x00.toByte(),                 //   Logical Minimum (0)
+        0x25.toByte(), 0x01.toByte(),                 //   Logical Maximum (1)
+        0x75.toByte(), 0x01.toByte(),                 //   Report Size (1)
+        0x95.toByte(), 0x08.toByte(),                 //   Report Count (8)
+        0x81.toByte(), 0x02.toByte(),                 //   Input (modifier bits)
+        0x95.toByte(), 0x01.toByte(),                 //   Report Count (1)
+        0x75.toByte(), 0x08.toByte(),                 //   Report Size (8)
+        0x81.toByte(), 0x03.toByte(),                 //   Input (Constant — reserved)
+        0x95.toByte(), 0x06.toByte(),                 //   Report Count (6)
+        0x75.toByte(), 0x08.toByte(),                 //   Report Size (8)
+        0x15.toByte(), 0x00.toByte(),                 //   Logical Minimum (0)
+        0x25.toByte(), 0x65.toByte(),                 //   Logical Maximum (101)
+        0x05.toByte(), 0x07.toByte(),                 //   Usage Page (Keyboard)
+        0x19.toByte(), 0x00.toByte(),                 //   Usage Minimum (0)
+        0x29.toByte(), 0x65.toByte(),                 //   Usage Maximum (101)
+        0x81.toByte(), 0x00.toByte(),                 //   Input (Data, Array)
         0xC0.toByte()                                 // End Collection
     )
+
+    /** Build the 8-byte keyboard report for a single (or no) key. */
+    fun keyboardReport(key: Byte): ByteArray =
+        byteArrayOf(0, 0, key, 0, 0, 0, 0, 0)
 }

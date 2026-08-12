@@ -42,6 +42,9 @@ class MainActivity : AppCompatActivity(),
     private lateinit var hidManager: HidGamepadManager
     private lateinit var ds3Driver: Ds3UsbDriver
 
+    /** When on, the pad also sends arrow keys/Enter so it can drive TV menus. */
+    private var tvNavigation = true
+
     /** State fed by a physical controller (native events or the raw DS3 driver). */
     private val externalState = GamepadState()
     private val mergedState = GamepadState()
@@ -180,6 +183,7 @@ class MainActivity : AppCompatActivity(),
             "LIGHT" -> Haptics.Level.LIGHT
             else -> Haptics.Level.STRONG
         }
+        tvNavigation = prefs.getBoolean(PREF_TV_NAV, true)
     }
 
     @SuppressLint("MissingPermission")
@@ -189,6 +193,9 @@ class MainActivity : AppCompatActivity(),
             getString(R.string.action_discoverable),
             getString(R.string.action_skin),
             getString(R.string.action_haptics),
+            getString(
+                if (tvNavigation) R.string.action_tv_nav_on else R.string.action_tv_nav_off
+            ),
             getString(R.string.action_bt_settings),
             getString(R.string.action_disconnect),
             getString(R.string.action_help)
@@ -201,13 +208,25 @@ class MainActivity : AppCompatActivity(),
                     1 -> makeDiscoverable()
                     2 -> showSkinPicker()
                     3 -> showHapticsPicker()
-                    4 -> startActivity(Intent(android.provider.Settings.ACTION_BLUETOOTH_SETTINGS))
-                    5 -> hidManager.disconnect()
-                    6 -> showHelp()
+                    4 -> toggleTvNavigation()
+                    5 -> startActivity(Intent(android.provider.Settings.ACTION_BLUETOOTH_SETTINGS))
+                    6 -> hidManager.disconnect()
+                    7 -> showHelp()
                 }
             }
             .setNegativeButton(android.R.string.cancel, null)
             .show()
+    }
+
+    private fun toggleTvNavigation() {
+        tvNavigation = !tvNavigation
+        getPreferences(MODE_PRIVATE).edit().putBoolean(PREF_TV_NAV, tvNavigation).apply()
+        if (!tvNavigation) hidManager.sendKey(HidConstants.KEY_NONE)
+        Toast.makeText(
+            this,
+            if (tvNavigation) R.string.tv_nav_enabled else R.string.tv_nav_disabled,
+            Toast.LENGTH_SHORT
+        ).show()
     }
 
     private fun showSkinPicker() {
@@ -304,11 +323,29 @@ class MainActivity : AppCompatActivity(),
         val intent = Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE)
             .putExtra(BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION, 300)
         try {
-            startActivity(intent)
-            controllerView.linkState = ControllerView.LinkState.DISCOVERABLE
-            Toast.makeText(this, R.string.discoverable_hint, Toast.LENGTH_LONG).show()
+            // Only light the pairing halo once the system confirms the phone
+            // really is discoverable — otherwise it lies when the user
+            // dismisses the system prompt.
+            startActivityForResult(intent, REQUEST_DISCOVERABLE)
         } catch (e: SecurityException) {
             Toast.makeText(this, R.string.bt_permission_needed, Toast.LENGTH_LONG).show()
+        }
+    }
+
+    @Deprecated("Simple one-shot result; fine for this single prompt.")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        @Suppress("DEPRECATION")
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode != REQUEST_DISCOVERABLE) return
+        // A granted request returns the discoverable duration in seconds;
+        // RESULT_CANCELED (0) means the user declined.
+        if (resultCode > 0) {
+            controllerView.linkState = ControllerView.LinkState.DISCOVERABLE
+            statusView.text = getString(R.string.status_discoverable)
+            Toast.makeText(this, R.string.discoverable_hint, Toast.LENGTH_LONG).show()
+        } else {
+            controllerView.linkState = ControllerView.LinkState.IDLE
+            Toast.makeText(this, R.string.discoverable_declined, Toast.LENGTH_LONG).show()
         }
     }
 
@@ -329,6 +366,21 @@ class MainActivity : AppCompatActivity(),
     private fun sendMerged() {
         GamepadState.merge(controllerView.touchState, externalState, mergedState)
         hidManager.send(mergedState)
+        if (tvNavigation) hidManager.sendKey(navKeyFor(mergedState))
+    }
+
+    /**
+     * Keyboard equivalent of the current state, so the pad also drives TV
+     * menus: d-pad → arrow keys, ✕ → Enter, ○ → Back.
+     */
+    private fun navKeyFor(state: GamepadState): Byte = when {
+        state.isPressed(HidConstants.BTN_CROSS) -> HidConstants.KEY_ENTER
+        state.isPressed(HidConstants.BTN_CIRCLE) -> HidConstants.KEY_ESCAPE
+        state.hat == 0 -> HidConstants.KEY_UP
+        state.hat == 2 -> HidConstants.KEY_RIGHT
+        state.hat == 4 -> HidConstants.KEY_DOWN
+        state.hat == 6 -> HidConstants.KEY_LEFT
+        else -> HidConstants.KEY_NONE
     }
 
     // ------------------------------------------------ physical controller input
@@ -498,6 +550,8 @@ class MainActivity : AppCompatActivity(),
 
     private companion object {
         const val REQUEST_BLUETOOTH = 101
+        const val REQUEST_DISCOVERABLE = 102
+        const val PREF_TV_NAV = "tv_navigation"
         const val PREF_LAST_DEVICE = "last_device_address"
         const val PREF_SKIN = "controller_skin"
         const val PREF_HAPTICS = "haptics_level"
