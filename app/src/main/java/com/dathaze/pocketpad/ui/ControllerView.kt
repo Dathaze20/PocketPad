@@ -9,6 +9,8 @@ import android.graphics.Path
 import android.util.AttributeSet
 import android.view.MotionEvent
 import android.view.View
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import com.dathaze.pocketpad.hid.GamepadState
 import com.dathaze.pocketpad.hid.HidConstants
 import kotlin.math.atan2
@@ -107,12 +109,27 @@ class ControllerView @JvmOverloads constructor(
         }
 
         override fun draw(canvas: Canvas) {
+            // Press animation: the cap sinks slightly and glows.
+            val r = if (pressed) radius * 0.93f else radius
+            if (pressed) {
+                glowPaint.color = accentColor
+                glowPaint.alpha = 70
+                canvas.drawCircle(cx, cy, radius * 1.12f, glowPaint)
+            }
             fillPaint.color = if (pressed) controlPressedColor else controlColor
-            canvas.drawCircle(cx, cy, radius, fillPaint)
+            canvas.drawCircle(cx, cy, r, fillPaint)
             strokePaint.color = if (pressed) accentColor else outlineColor
-            canvas.drawCircle(cx, cy, radius, strokePaint)
+            canvas.drawCircle(cx, cy, r, strokePaint)
+            // Soft top light so buttons read as raised caps.
+            if (!pressed) {
+                highlightPaint.alpha = 26
+                canvas.drawArc(
+                    cx - r * 0.72f, cy - r * 0.72f, cx + r * 0.72f, cy + r * 0.72f,
+                    200f, 140f, false, highlightPaint
+                )
+            }
             textPaint.color = labelColor
-            textPaint.textSize = radius * 0.72f * labelScale
+            textPaint.textSize = r * 0.72f * labelScale
             canvas.drawText(label, cx, cy - (textPaint.ascent() + textPaint.descent()) / 2f, textPaint)
         }
     }
@@ -266,6 +283,12 @@ class ControllerView @JvmOverloads constructor(
         isFakeBoldText = true
     }
     private val arrowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
+    private val glowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
+    private val highlightPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeWidth = 4f
+        color = Color.WHITE
+    }
     private val arrowPath = Path()
 
     private val backgroundColor = Color.parseColor("#101118")
@@ -317,8 +340,30 @@ class ControllerView @JvmOverloads constructor(
 
     private var activeControls: List<Control> = emptyList()
 
+    // Safe-area offsets so controls avoid the camera cutout and gesture bars.
+    private var safeLeft = 0f
+    private var safeTop = 0f
+    private var safeRight = 0f
+    private var safeBottom = 0f
+    private var offX = 0f
+    private var offY = 0f
+
     init {
         applySkin()
+        ViewCompat.setOnApplyWindowInsetsListener(this) { _, insets ->
+            val bars = insets.getInsets(
+                WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout()
+            )
+            safeLeft = bars.left.toFloat()
+            safeTop = bars.top.toFloat()
+            safeRight = bars.right.toFloat()
+            safeBottom = bars.bottom.toFloat()
+            if (width > 0 && height > 0) {
+                layoutControls(width.toFloat(), height.toFloat())
+                invalidate()
+            }
+            insets
+        }
     }
 
     private fun applySkin() {
@@ -384,7 +429,12 @@ class ControllerView @JvmOverloads constructor(
         layoutControls(w.toFloat(), h.toFloat())
     }
 
-    private fun layoutControls(w: Float, h: Float) {
+    private fun layoutControls(fullW: Float, fullH: Float) {
+        // Lay out inside the safe area (excludes cutout + gesture bars).
+        offX = safeLeft
+        offY = safeTop
+        val w = (fullW - safeLeft - safeRight).coerceAtLeast(1f)
+        val h = (fullH - safeTop - safeBottom).coerceAtLeast(1f)
         val portrait = h >= w
         when (skin) {
             Skin.PS -> if (portrait) layoutPsPortrait(w, h) else layoutPsLandscape(w, h)
@@ -395,8 +445,8 @@ class ControllerView @JvmOverloads constructor(
     }
 
     private fun place(c: Control, x: Float, y: Float, r: Float) {
-        c.cx = x
-        c.cy = y
+        c.cx = offX + x
+        c.cy = offY + y
         c.radius = r
     }
 

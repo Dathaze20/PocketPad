@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothHidDevice
+import android.bluetooth.BluetoothHidDeviceAppQosSettings
 import android.bluetooth.BluetoothHidDeviceAppSdpSettings
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothProfile
@@ -43,6 +44,7 @@ class HidGamepadManager(private val context: Context, private val listener: List
     private var registered = false
     private var pendingConnect: BluetoothDevice? = null
     private var started = false
+    private var lastReport: ByteArray? = null
 
     val isConnected: Boolean get() = connectedDevice != null
     val currentDevice: BluetoothDevice? get() = connectedDevice
@@ -108,12 +110,19 @@ class HidGamepadManager(private val context: Context, private val listener: List
         }
     }
 
-    /** Send the current gamepad state to the connected host. */
+    /**
+     * Send the current gamepad state to the connected host. Identical
+     * back-to-back reports are dropped so the radio only carries changes —
+     * lower latency and less battery.
+     */
     fun send(state: GamepadState) {
         val proxy = hidDevice ?: return
         val device = connectedDevice ?: return
+        val report = state.toReport()
+        if (lastReport?.contentEquals(report) == true) return
         try {
-            proxy.sendReport(device, HidConstants.REPORT_ID, state.toReport())
+            proxy.sendReport(device, HidConstants.REPORT_ID, report)
+            lastReport = report
         } catch (_: SecurityException) {
         }
     }
@@ -130,8 +139,14 @@ class HidGamepadManager(private val context: Context, private val listener: List
                 SUBCLASS_GAMEPAD,
                 HidConstants.REPORT_DESCRIPTOR
             )
+            // Ask the host for a low-latency link (~11 ms latency budget),
+            // the same QoS profile real Bluetooth gamepads request.
+            val qos = BluetoothHidDeviceAppQosSettings(
+                BluetoothHidDeviceAppQosSettings.SERVICE_BEST_EFFORT,
+                800, 9, 0, 11250, BluetoothHidDeviceAppQosSettings.MAX
+            )
             try {
-                proxy.registerApp(sdp, null, null, executor, hidCallback)
+                proxy.registerApp(sdp, null, qos, executor, hidCallback)
             } catch (_: SecurityException) {
                 post { listener.onHidStatus("Bluetooth permission missing") }
             }
@@ -173,6 +188,7 @@ class HidGamepadManager(private val context: Context, private val listener: List
                     post { listener.onHidStatus("Connecting to ${safeName(device)}…") }
                 BluetoothProfile.STATE_DISCONNECTED -> {
                     if (connectedDevice == device) connectedDevice = null
+                    lastReport = null
                     post { listener.onHidDisconnected() }
                 }
             }

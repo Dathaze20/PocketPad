@@ -47,6 +47,7 @@ class Ds3UsbDriver(private val context: Context, private val listener: Listener)
     private var readerThread: Thread? = null
     @Volatile private var running = false
     private var permissionReceiverRegistered = false
+    private var detachReceiverRegistered = false
 
     val isActive: Boolean get() = running
 
@@ -108,6 +109,7 @@ class Ds3UsbDriver(private val context: Context, private val listener: Listener)
         connection = conn
         claimedInterface = iface
         running = true
+        registerDetachReceiver()
         status(true, "PS3 controller connected")
 
         readerThread = Thread({ readLoop(conn, endpoint) }, "ds3-reader").also { it.start() }
@@ -141,6 +143,41 @@ class Ds3UsbDriver(private val context: Context, private val listener: Listener)
             } catch (_: IllegalArgumentException) {
             }
             permissionReceiverRegistered = false
+        }
+        if (detachReceiverRegistered) {
+            try {
+                context.unregisterReceiver(detachReceiver)
+            } catch (_: IllegalArgumentException) {
+            }
+            detachReceiverRegistered = false
+        }
+    }
+
+    private fun registerDetachReceiver() {
+        if (detachReceiverRegistered) return
+        val filter = IntentFilter(UsbManager.ACTION_USB_DEVICE_DETACHED)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            context.registerReceiver(detachReceiver, filter, Context.RECEIVER_EXPORTED)
+        } else {
+            @Suppress("UnspecifiedRegisterReceiverFlag")
+            context.registerReceiver(detachReceiver, filter)
+        }
+        detachReceiverRegistered = true
+    }
+
+    private val detachReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            if (intent.action != UsbManager.ACTION_USB_DEVICE_DETACHED) return
+            val device: UsbDevice? =
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
+                    intent.getParcelableExtra(UsbManager.EXTRA_DEVICE, UsbDevice::class.java)
+                else
+                    @Suppress("DEPRECATION")
+                    intent.getParcelableExtra(UsbManager.EXTRA_DEVICE)
+            if (device != null && isDs3(device) && running) {
+                close()
+                status(false, "PS3 controller disconnected")
+            }
         }
     }
 

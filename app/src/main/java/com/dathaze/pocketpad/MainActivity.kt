@@ -83,6 +83,12 @@ class MainActivity : AppCompatActivity(),
         handleUsbIntent(intent)
     }
 
+    override fun onResume() {
+        super.onResume()
+        // If Bluetooth was off at launch, retry once the user comes back.
+        if (hasBluetoothPermissions()) hidManager.start()
+    }
+
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
         if (hasFocus) enterImmersiveMode()
@@ -100,6 +106,14 @@ class MainActivity : AppCompatActivity(),
             hide(WindowInsetsCompat.Type.systemBars())
             systemBarsBehavior =
                 WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        }
+        // Keep the status pill clear of the camera cutout.
+        androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(statusView) { view, insets ->
+            val top = insets.getInsets(
+                WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout()
+            ).top
+            view.translationY = top.toFloat()
+            insets
         }
     }
 
