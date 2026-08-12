@@ -27,6 +27,12 @@ No app is needed on the other device. PocketPad uses Android's native `Bluetooth
 3. Select the device named after your phone and confirm pairing on both screens.
 4. Done — the status pill at the top shows **Connected**. Next time, use **⚙ → Connect to a paired device** to reconnect instantly.
 
+## Installing on your phone
+
+**[Download the newest APK →](https://github.com/Dathaze20/PocketPad/releases/latest)** (tap `PocketPad.apk`, no login needed)
+
+Android will warn that the app is from an unknown developer — that's Play Protect doing its job on any sideloaded app. On the **"App blocked to protect your device"** dialog, tap **More details → Install anyway**. Full walkthrough of every warning screen: **[docs/INSTALL.md](docs/INSTALL.md)**.
+
 ## First-run test plan
 
 Compilation is verified by CI on every push, but Bluetooth pairing can only be proven on real hardware. First time out, check these in order:
