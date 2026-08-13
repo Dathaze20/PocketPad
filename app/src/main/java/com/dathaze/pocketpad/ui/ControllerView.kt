@@ -8,6 +8,7 @@ import android.graphics.Color
 import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.Path
+import android.graphics.RectF
 import android.graphics.Shader
 import kotlin.math.max
 import android.os.SystemClock
@@ -105,6 +106,90 @@ class ControllerView @JvmOverloads constructor(
         open fun onMove(x: Float, y: Float) {}
         open fun onUp() {}
         abstract fun draw(canvas: Canvas)
+
+        // -------- molded-plastic rendering ------------------------------
+        // Shaders depend on geometry, so they are rebuilt only when a control
+        // moves or resizes — not on every frame.
+
+        private var shaderX = Float.NaN
+        private var shaderY = Float.NaN
+        private var shaderR = Float.NaN
+        private var capRaised: LinearGradient? = null
+        private var capSunken: LinearGradient? = null
+
+        private fun ensureShaders() {
+            if (cx == shaderX && cy == shaderY && radius == shaderR) return
+            shaderX = cx; shaderY = cy; shaderR = radius
+            // Light falls from above: lit crown, shadowed skirt. Pressed caps
+            // invert, so the top edge reads as the deepest part of the dish.
+            capRaised = LinearGradient(
+                cx, cy - radius, cx, cy + radius, capLit, capShade, Shader.TileMode.CLAMP
+            )
+            capSunken = LinearGradient(
+                cx, cy - radius, cx, cy + radius, capPressedDeep, capPressedRise,
+                Shader.TileMode.CLAMP
+            )
+        }
+
+        /**
+         * Draws a physical-looking button: a recessed socket, a drop shadow,
+         * a gradient cap, and a bevel that is bright along the top edge and
+         * dark along the bottom. Pressing sinks the cap into the socket, kills
+         * the shadow and flips the bevel — the same cues a real controller
+         * gives your eye.
+         */
+        fun drawMoldedCap(canvas: Canvas, r: Float, rimColor: Int) {
+            ensureShaders()
+            val sink = if (pressed) r * 0.07f else 0f
+            val capY = cy + sink
+
+            // Socket the cap sits in.
+            moldPaint.shader = null
+            moldPaint.color = socketColor
+            canvas.drawCircle(cx, cy + r * 0.04f, r * 1.14f, moldPaint)
+            bevelPaint.strokeWidth = r * 0.08f
+            bevelPaint.color = withAlpha(Color.BLACK, 140)
+            arcRect(cx, cy + r * 0.04f, r * 1.10f)
+            canvas.drawArc(tmpRect, 190f, 160f, false, bevelPaint)
+            bevelPaint.color = withAlpha(Color.WHITE, 22)
+            canvas.drawArc(tmpRect, 10f, 160f, false, bevelPaint)
+
+            // Cast shadow — only while the cap stands proud of the socket.
+            if (!pressed) {
+                moldPaint.color = withAlpha(Color.BLACK, 90)
+                canvas.drawCircle(cx, capY + r * 0.10f, r * 0.98f, moldPaint)
+            }
+
+            // The cap itself.
+            moldPaint.shader = if (pressed) capSunken else capRaised
+            canvas.drawCircle(cx, capY, r, moldPaint)
+            moldPaint.shader = null
+
+            // Bevelled edge.
+            arcRect(cx, capY, r * 0.955f)
+            bevelPaint.strokeWidth = r * 0.10f
+            bevelPaint.color = withAlpha(Color.WHITE, if (pressed) 18 else 66)
+            canvas.drawArc(tmpRect, 186f, 150f, false, bevelPaint)
+            bevelPaint.color = withAlpha(Color.BLACK, if (pressed) 130 else 85)
+            canvas.drawArc(tmpRect, 6f, 150f, false, bevelPaint)
+
+            // Coloured ring for face/home buttons.
+            if (rimColor != 0) {
+                strokePaint.color = withAlpha(rimColor, if (pressed) 255 else 165)
+                canvas.drawCircle(cx, capY, r * 0.98f, strokePaint)
+            }
+
+            // Specular glint on the crown.
+            if (!pressed) {
+                arcRect(cx, capY - r * 0.10f, r * 0.62f)
+                bevelPaint.strokeWidth = r * 0.13f
+                bevelPaint.color = withAlpha(Color.WHITE, 30)
+                canvas.drawArc(tmpRect, 205f, 105f, false, bevelPaint)
+            }
+        }
+
+        /** Vertical offset the cap currently sits at (for labels). */
+        fun capSink(r: Float): Float = if (pressed) r * 0.07f else 0f
     }
 
     /**
@@ -141,35 +226,24 @@ class ControllerView @JvmOverloads constructor(
         }
 
         override fun draw(canvas: Canvas) {
-            // Colored rim buttons (face + home) glow in their own color.
             val tint = if (rimmed) labelColor else accentColor
-            // Press animation: the cap sinks slightly and glows.
-            val r = if (pressed) radius * 0.93f else radius
             if (isHome) drawHalo(canvas)
             if (pressed) {
                 glowPaint.color = tint
-                glowPaint.alpha = 80
-                canvas.drawCircle(cx, cy, radius * 1.12f, glowPaint)
+                glowPaint.alpha = 70
+                canvas.drawCircle(cx, cy, radius * 1.20f, glowPaint)
             }
-            fillPaint.color = if (pressed) controlPressedColor else controlColor
-            canvas.drawCircle(cx, cy, r, fillPaint)
-            strokePaint.color = when {
-                pressed -> tint
-                rimmed -> withAlpha(labelColor, 150)
-                else -> outlineColor
-            }
-            canvas.drawCircle(cx, cy, r, strokePaint)
-            // Soft top light so buttons read as raised caps.
-            if (!pressed) {
-                highlightPaint.alpha = 26
-                canvas.drawArc(
-                    cx - r * 0.72f, cy - r * 0.72f, cx + r * 0.72f, cy + r * 0.72f,
-                    200f, 140f, false, highlightPaint
-                )
-            }
-            textPaint.color = labelColor
-            textPaint.textSize = r * 0.72f * labelScale
-            canvas.drawText(label, cx, cy - (textPaint.ascent() + textPaint.descent()) / 2f, textPaint)
+            drawMoldedCap(canvas, radius, if (rimmed) labelColor else 0)
+
+            // Engraved label: a dark offset copy under the glyph makes it read
+            // as stamped into the plastic rather than printed on top.
+            val capY = cy + capSink(radius)
+            textPaint.textSize = radius * 0.72f * labelScale
+            val baseline = capY - (textPaint.ascent() + textPaint.descent()) / 2f
+            textPaint.color = withAlpha(Color.BLACK, 120)
+            canvas.drawText(label, cx, baseline + radius * 0.035f, textPaint)
+            textPaint.color = if (pressed) brighten(labelColor) else labelColor
+            canvas.drawText(label, cx, baseline, textPaint)
         }
 
         /**
@@ -243,23 +317,93 @@ class ControllerView @JvmOverloads constructor(
             }
         }
 
+        /**
+         * A moulded cross in a recessed dish, like the DualShock's. Each arm
+         * is bevelled on its own, separated by cut grooves, and the arm you
+         * are holding sinks and darkens while its arrow lights up.
+         */
         override fun draw(canvas: Canvas) {
-            fillPaint.color = controlColor
-            canvas.drawCircle(cx, cy, radius, fillPaint)
-            strokePaint.color = if (pressed) accentColor else outlineColor
-            canvas.drawCircle(cx, cy, radius, strokePaint)
-            // Cross
             val arm = radius * 0.30f
-            val len = radius * 0.80f
-            fillPaint.color = if (pressed) controlPressedColor else surfaceColor
-            canvas.drawRoundRect(cx - arm, cy - len, cx + arm, cy + len, arm * 0.5f, arm * 0.5f, fillPaint)
-            canvas.drawRoundRect(cx - len, cy - arm, cx + len, cy + arm, arm * 0.5f, arm * 0.5f, fillPaint)
-            // Direction arrows
-            arrowPaint.color = if (pressed) textColor else dpadArrowColor
-            drawArrow(canvas, cx, cy - len * 0.72f, radius * 0.16f, 0f)
-            drawArrow(canvas, cx + len * 0.72f, cy, radius * 0.16f, 90f)
-            drawArrow(canvas, cx, cy + len * 0.72f, radius * 0.16f, 180f)
-            drawArrow(canvas, cx - len * 0.72f, cy, radius * 0.16f, 270f)
+            val len = radius * 0.82f
+            val hat = touchState.hat
+            val up = hat == 7 || hat == 0 || hat == 1
+            val right = hat == 1 || hat == 2 || hat == 3
+            val down = hat == 3 || hat == 4 || hat == 5
+            val left = hat == 5 || hat == 6 || hat == 7
+
+            // Recessed dish the cross sits in.
+            moldPaint.shader = null
+            moldPaint.color = socketColor
+            canvas.drawCircle(cx, cy + radius * 0.03f, radius, moldPaint)
+            bevelPaint.strokeWidth = radius * 0.07f
+            bevelPaint.color = withAlpha(Color.BLACK, 150)
+            arcRect(cx, cy + radius * 0.03f, radius * 0.965f)
+            canvas.drawArc(tmpRect, 190f, 160f, false, bevelPaint)
+            bevelPaint.color = withAlpha(Color.WHITE, 26)
+            canvas.drawArc(tmpRect, 10f, 160f, false, bevelPaint)
+
+            // Cross body, cast shadow first so it lifts off the dish.
+            val round = arm * 0.42f
+            moldPaint.color = withAlpha(Color.BLACK, 105)
+            canvas.drawRoundRect(
+                cx - arm, cy - len + radius * 0.06f, cx + arm, cy + len + radius * 0.06f,
+                round, round, moldPaint
+            )
+            canvas.drawRoundRect(
+                cx - len, cy - arm + radius * 0.06f, cx + len, cy + arm + radius * 0.06f,
+                round, round, moldPaint
+            )
+            moldPaint.shader = crossShader(cy - len, cy + len)
+            canvas.drawRoundRect(cx - arm, cy - len, cx + arm, cy + len, round, round, moldPaint)
+            canvas.drawRoundRect(cx - len, cy - arm, cx + len, cy + arm, round, round, moldPaint)
+            moldPaint.shader = null
+
+            // Each held arm sinks into the body.
+            drawArm(canvas, up, cx - arm, cy - len, cx + arm, cy + arm, round)
+            drawArm(canvas, down, cx - arm, cy - arm, cx + arm, cy + len, round)
+            drawArm(canvas, left, cx - len, cy - arm, cx + arm, cy + arm, round)
+            drawArm(canvas, right, cx - arm, cy - arm, cx + len, cy + arm, round)
+
+            // Grooves where the arms meet, plus the dished centre pivot.
+            bevelPaint.strokeWidth = radius * 0.035f
+            bevelPaint.color = withAlpha(Color.BLACK, 165)
+            canvas.drawLine(cx - arm, cy - arm, cx - arm, cy + arm, bevelPaint)
+            canvas.drawLine(cx + arm, cy - arm, cx + arm, cy + arm, bevelPaint)
+            canvas.drawLine(cx - arm, cy - arm, cx + arm, cy - arm, bevelPaint)
+            canvas.drawLine(cx - arm, cy + arm, cx + arm, cy + arm, bevelPaint)
+            moldPaint.color = withAlpha(Color.BLACK, 70)
+            canvas.drawCircle(cx, cy, arm * 0.52f, moldPaint)
+            bevelPaint.strokeWidth = radius * 0.025f
+            bevelPaint.color = withAlpha(Color.WHITE, 24)
+            arcRect(cx, cy, arm * 0.52f)
+            canvas.drawArc(tmpRect, 10f, 160f, false, bevelPaint)
+
+            // Arrows — the live direction glows.
+            drawDirArrow(canvas, cx, cy - len * 0.70f, radius * 0.155f, 0f, up)
+            drawDirArrow(canvas, cx + len * 0.70f, cy, radius * 0.155f, 90f, right)
+            drawDirArrow(canvas, cx, cy + len * 0.70f, radius * 0.155f, 180f, down)
+            drawDirArrow(canvas, cx - len * 0.70f, cy, radius * 0.155f, 270f, left)
+        }
+
+        private fun drawArm(
+            canvas: Canvas, active: Boolean,
+            l: Float, t: Float, r: Float, b: Float, round: Float
+        ) {
+            if (!active) return
+            moldPaint.shader = null
+            moldPaint.color = withAlpha(Color.BLACK, 120)
+            canvas.drawRoundRect(l, t, r, b, round, round, moldPaint)
+            moldPaint.color = withAlpha(accentColor, 46)
+            canvas.drawRoundRect(l, t, r, b, round, round, moldPaint)
+        }
+
+        private fun drawDirArrow(
+            canvas: Canvas, x: Float, y: Float, size: Float, rotation: Float, active: Boolean
+        ) {
+            arrowPaint.color = withAlpha(Color.BLACK, 130)
+            drawArrow(canvas, x, y + size * 0.16f, size, rotation)
+            arrowPaint.color = if (active) neonCyan else dpadArrowColor
+            drawArrow(canvas, x, y, size, rotation)
         }
     }
 
@@ -314,15 +458,58 @@ class ControllerView @JvmOverloads constructor(
             }
         }
 
+        /**
+         * A thumbstick sunk in a well: the housing is concave (dark at the
+         * top rim, lit at the bottom), and the cap is a domed head with a
+         * grippy lip and a dished, textured face that carries its own shadow
+         * as you push it around.
+         */
         override fun draw(canvas: Canvas) {
-            fillPaint.color = surfaceColor
-            canvas.drawCircle(cx, cy, radius, fillPaint)
-            strokePaint.color = if (pressed) accentColor else outlineColor
-            canvas.drawCircle(cx, cy, radius, strokePaint)
-            fillPaint.color = if (pressed) controlPressedColor else controlColor
-            canvas.drawCircle(cx + knobX, cy + knobY, radius * 0.52f, fillPaint)
-            strokePaint.color = outlineColor
-            canvas.drawCircle(cx + knobX, cy + knobY, radius * 0.52f, strokePaint)
+            val kx = cx + knobX
+            val ky = cy + knobY
+            val capR = radius * 0.56f
+
+            // Well.
+            moldPaint.shader = null
+            moldPaint.color = socketColor
+            canvas.drawCircle(cx, cy, radius, moldPaint)
+            bevelPaint.strokeWidth = radius * 0.09f
+            bevelPaint.color = withAlpha(Color.BLACK, 165)
+            arcRect(cx, cy, radius * 0.955f)
+            canvas.drawArc(tmpRect, 185f, 165f, false, bevelPaint)
+            bevelPaint.color = withAlpha(Color.WHITE, 30)
+            canvas.drawArc(tmpRect, 5f, 165f, false, bevelPaint)
+
+            // Travel ring, brighter while the stick is in use.
+            strokePaint.color = withAlpha(if (pressed) accentColor else outlineColor, if (pressed) 180 else 90)
+            canvas.drawCircle(cx, cy, radius * 0.86f, strokePaint)
+
+            // Cap shadow, thrown onto the well floor.
+            moldPaint.color = withAlpha(Color.BLACK, 120)
+            canvas.drawCircle(kx + knobX * 0.06f, ky + radius * 0.09f, capR, moldPaint)
+
+            // Domed head.
+            moldPaint.shader = LinearGradient(
+                kx, ky - capR, kx, ky + capR, capLit, capShade, Shader.TileMode.CLAMP
+            )
+            canvas.drawCircle(kx, ky, capR, moldPaint)
+            moldPaint.shader = null
+
+            // Grippy outer lip.
+            bevelPaint.strokeWidth = capR * 0.16f
+            bevelPaint.color = withAlpha(Color.WHITE, 52)
+            arcRect(kx, ky, capR * 0.92f)
+            canvas.drawArc(tmpRect, 190f, 150f, false, bevelPaint)
+            bevelPaint.color = withAlpha(Color.BLACK, 105)
+            canvas.drawArc(tmpRect, 10f, 150f, false, bevelPaint)
+
+            // Dished face: darker in the middle, lit on the lower inner edge.
+            moldPaint.color = withAlpha(Color.BLACK, 62)
+            canvas.drawCircle(kx, ky, capR * 0.62f, moldPaint)
+            bevelPaint.strokeWidth = capR * 0.07f
+            bevelPaint.color = withAlpha(Color.WHITE, 26)
+            arcRect(kx, ky, capR * 0.62f)
+            canvas.drawArc(tmpRect, 15f, 150f, false, bevelPaint)
         }
     }
 
@@ -337,19 +524,19 @@ class ControllerView @JvmOverloads constructor(
         }
 
         override fun draw(canvas: Canvas) {
-            fillPaint.color = if (pressed) controlPressedColor else surfaceColor
-            canvas.drawCircle(cx, cy, radius, fillPaint)
-            strokePaint.color = outlineColor
-            canvas.drawCircle(cx, cy, radius, strokePaint)
-            textPaint.color = textColor
+            drawMoldedCap(canvas, radius, 0)
+            val capY = cy + capSink(radius)
             textPaint.textSize = radius
-            canvas.drawText("⚙", cx, cy - (textPaint.ascent() + textPaint.descent()) / 2f, textPaint)
+            val baseline = capY - (textPaint.ascent() + textPaint.descent()) / 2f
+            textPaint.color = withAlpha(Color.BLACK, 120)
+            canvas.drawText("⚙", cx, baseline + radius * 0.04f, textPaint)
+            textPaint.color = textColor
+            canvas.drawText("⚙", cx, baseline, textPaint)
         }
     }
 
     // ------------------------------------------------------------------ paints
 
-    private val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
     private val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
         strokeWidth = 3f
@@ -361,13 +548,36 @@ class ControllerView @JvmOverloads constructor(
     private val arrowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
     private val glowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
     private val haloPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
+    private val moldPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
+    private val bevelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeCap = Paint.Cap.ROUND
+    }
+    private val tmpRect = RectF()
+
+    // Molded-plastic palette: lit crown, shadowed skirt, near-black socket.
+    private val capLit = Color.parseColor("#474D69")
+    private val capShade = Color.parseColor("#202432")
+    private val capPressedDeep = Color.parseColor("#171A24")
+    private val capPressedRise = Color.parseColor("#343A52")
+    private val socketColor = Color.parseColor("#0C0E15")
+
+    private fun arcRect(x: Float, y: Float, r: Float) {
+        tmpRect.set(x - r, y - r, x + r, y + r)
+    }
+
+    /** Vertical gradient reused for the d-pad cross. */
+    private fun crossShader(top: Float, bottom: Float): LinearGradient =
+        LinearGradient(0f, top, 0f, bottom, capLit, capShade, Shader.TileMode.CLAMP)
+
+    /** Lift a color toward white — used for labels on a pressed cap. */
+    private fun brighten(color: Int): Int = Color.rgb(
+        (Color.red(color) + (255 - Color.red(color)) * 0.45f).toInt(),
+        (Color.green(color) + (255 - Color.green(color)) * 0.45f).toInt(),
+        (Color.blue(color) + (255 - Color.blue(color)) * 0.45f).toInt()
+    )
     private val neonCyan = Color.parseColor("#2BE4FF")
     private val neonGreen = Color.parseColor("#3BFFA8")
-    private val highlightPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.STROKE
-        strokeWidth = 4f
-        color = Color.WHITE
-    }
     private val arrowPath = Path()
 
     // Background gradients: deep navy fading to indigo (Game Boy skin goes green).
@@ -376,10 +586,7 @@ class ControllerView @JvmOverloads constructor(
     private val gbBgTop = Color.parseColor("#131F18")
     private val gbBgBottom = Color.parseColor("#20301F")
     private val dpadArrowColor = Color.parseColor("#A9AEC6")
-    private val surfaceColor = Color.parseColor("#1C1E2A")
     private val outlineColor = Color.parseColor("#3A3D52")
-    private val controlColor = Color.parseColor("#262939")
-    private val controlPressedColor = Color.parseColor("#4A517A")
     private val textColor = Color.parseColor("#E8E9F0")
     private val dimTextColor = Color.parseColor("#8A8FA8")
     private val accentColor = Color.parseColor("#6C79FF")
@@ -668,8 +875,8 @@ class ControllerView @JvmOverloads constructor(
     // control sits inside another's halo — spacing modeled on a real pad.
 
     private fun layoutPsPortrait(w: Float, h: Float) {
-        val small = w * 0.075f
-        val face = w * 0.085f
+        val small = w * 0.072f
+        val face = w * 0.078f
         place(btnL1, w * 0.10f, h * 0.10f, small)
         place(btnL2, w * 0.26f, h * 0.10f, small)
         place(btnR2, w * 0.74f, h * 0.10f, small)
@@ -677,7 +884,7 @@ class ControllerView @JvmOverloads constructor(
         place(dpad, w * 0.26f, h * 0.28f, w * 0.19f)
         val fx = w * 0.74f
         val fy = h * 0.28f
-        val off = w * 0.125f
+        val off = w * 0.138f
         place(faceTop, fx, fy - off, face)
         place(faceRight, fx + off, fy, face)
         place(faceBottom, fx, fy + off, face)
@@ -693,8 +900,8 @@ class ControllerView @JvmOverloads constructor(
     }
 
     private fun layoutPsLandscape(w: Float, h: Float) {
-        val small = h * 0.075f
-        val face = h * 0.10f
+        val small = h * 0.072f
+        val face = h * 0.092f
         place(btnL2, w * 0.055f, h * 0.14f, small)
         place(btnL1, w * 0.145f, h * 0.14f, small)
         place(btnR1, w * 0.855f, h * 0.14f, small)
@@ -702,15 +909,15 @@ class ControllerView @JvmOverloads constructor(
         place(dpad, w * 0.135f, h * 0.52f, min(w, h) * 0.21f)
         val fx = w * 0.865f
         val fy = h * 0.52f
-        val off = min(w, h) * 0.145f
+        val off = min(w, h) * 0.168f
         place(faceTop, fx, fy - off, face)
         place(faceRight, fx + off, fy, face)
         place(faceBottom, fx, fy + off, face)
         place(faceLeft, fx - off, fy, face)
-        place(leftStick, w * 0.335f, h * 0.70f, h * 0.17f)
-        place(rightStick, w * 0.665f, h * 0.70f, h * 0.17f)
-        place(btnL3, w * 0.44f, h * 0.92f, small * 0.8f)
-        place(btnR3, w * 0.56f, h * 0.92f, small * 0.8f)
+        place(leftStick, w * 0.335f, h * 0.68f, h * 0.155f)
+        place(rightStick, w * 0.665f, h * 0.68f, h * 0.155f)
+        place(btnL3, w * 0.445f, h * 0.94f, small * 0.78f)
+        place(btnR3, w * 0.555f, h * 0.94f, small * 0.78f)
         place(btnShare, w * 0.38f, h * 0.22f, small)
         place(btnHome, w * 0.50f, h * 0.44f, small * 1.2f)
         place(btnOptions, w * 0.62f, h * 0.22f, small)
@@ -720,14 +927,14 @@ class ControllerView @JvmOverloads constructor(
     // ---------------------------------------------------------- SNES layouts
 
     private fun layoutSnesPortrait(w: Float, h: Float) {
-        val small = w * 0.08f
-        val face = w * 0.09f
+        val small = w * 0.076f
+        val face = w * 0.082f
         place(btnL1, w * 0.12f, h * 0.10f, small)
         place(btnR1, w * 0.88f, h * 0.10f, small)
         place(dpad, w * 0.26f, h * 0.30f, w * 0.20f)
         val fx = w * 0.74f
         val fy = h * 0.30f
-        val off = w * 0.13f
+        val off = w * 0.145f
         place(faceTop, fx, fy - off, face)
         place(faceRight, fx + off, fy, face)
         place(faceBottom, fx, fy + off, face)
@@ -739,14 +946,14 @@ class ControllerView @JvmOverloads constructor(
     }
 
     private fun layoutSnesLandscape(w: Float, h: Float) {
-        val small = h * 0.08f
-        val face = h * 0.105f
+        val small = h * 0.076f
+        val face = h * 0.095f
         place(btnL1, w * 0.09f, h * 0.14f, small)
         place(btnR1, w * 0.91f, h * 0.14f, small)
         place(dpad, w * 0.16f, h * 0.58f, min(w, h) * 0.22f)
         val fx = w * 0.84f
         val fy = h * 0.58f
-        val off = min(w, h) * 0.15f
+        val off = min(w, h) * 0.172f
         place(faceTop, fx, fy - off, face)
         place(faceRight, fx + off, fy, face)
         place(faceBottom, fx, fy + off, face)
