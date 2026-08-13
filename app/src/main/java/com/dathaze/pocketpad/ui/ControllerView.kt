@@ -335,16 +335,21 @@ class ControllerView @JvmOverloads constructor(
 
             ensureCross(arm, len)
 
-            // Shallow housing dish.
+            // Housing: a real pad has no black plate behind the cross, just a
+            // shallow hollow the piece pivots in. Kept tight to the cross and
+            // faded at its edge so it reads as recessed shell, not a disc.
             moldPaint.shader = null
-            moldPaint.color = socketColor
-            canvas.drawCircle(cx, cy + radius * 0.03f, radius, moldPaint)
-            bevelPaint.strokeWidth = radius * 0.07f
-            bevelPaint.color = withAlpha(Color.BLACK, 150)
-            arcRect(cx, cy + radius * 0.03f, radius * 0.965f)
-            canvas.drawArc(tmpRect, 190f, 160f, false, bevelPaint)
+            val housingR = len * 1.16f
+            moldPaint.color = withAlpha(Color.BLACK, 70)
+            canvas.drawCircle(cx, cy + radius * 0.02f, housingR, moldPaint)
+            moldPaint.color = withAlpha(Color.BLACK, 60)
+            canvas.drawCircle(cx, cy + radius * 0.02f, housingR * 0.93f, moldPaint)
+            bevelPaint.strokeWidth = radius * 0.045f
+            bevelPaint.color = withAlpha(Color.BLACK, 120)
+            arcRect(cx, cy + radius * 0.02f, housingR * 0.99f)
+            canvas.drawArc(tmpRect, 195f, 150f, false, bevelPaint)
             bevelPaint.color = withAlpha(Color.WHITE, 26)
-            canvas.drawArc(tmpRect, 10f, 160f, false, bevelPaint)
+            canvas.drawArc(tmpRect, 15f, 150f, false, bevelPaint)
 
             // How far the cross tips, and toward where.
             val tilt = radius * 0.05f
@@ -494,57 +499,77 @@ class ControllerView @JvmOverloads constructor(
         }
 
         /**
-         * A thumbstick sunk in a well: the housing is concave (dark at the
-         * top rim, lit at the bottom), and the cap is a domed head with a
-         * grippy lip and a dished, textured face that carries its own shadow
-         * as you push it around.
+         * A thumbstick standing in a deep well. The head is a dome: a bright
+         * crown, a rim-lit grippy lip, and a concave face that catches light
+         * on its far wall. It throws a contact shadow onto the well floor
+         * that lengthens and shifts as the stick is pushed, which is what
+         * sells it as a solid object standing above the surface.
          */
         override fun draw(canvas: Canvas) {
             val kx = cx + knobX
             val ky = cy + knobY
             val capR = radius * 0.56f
+            val travel = hypot(knobX.toDouble(), knobY.toDouble()).toFloat()
+            val lean = if (radius > 0f) (travel / (radius * 0.82f)).coerceIn(0f, 1f) else 0f
 
-            // Well.
+            // Well: deep, with a dark upper rim and a lit lower rim so it
+            // reads as a hole rather than a disc.
             moldPaint.shader = null
-            moldPaint.color = socketColor
+            moldPaint.color = wellColor
             canvas.drawCircle(cx, cy, radius, moldPaint)
-            bevelPaint.strokeWidth = radius * 0.09f
-            bevelPaint.color = withAlpha(Color.BLACK, 165)
-            arcRect(cx, cy, radius * 0.955f)
+            moldPaint.color = withAlpha(Color.BLACK, 110)
+            canvas.drawCircle(cx, cy, radius * 0.90f, moldPaint)
+            bevelPaint.strokeWidth = radius * 0.10f
+            bevelPaint.color = withAlpha(Color.BLACK, 185)
+            arcRect(cx, cy, radius * 0.95f)
             canvas.drawArc(tmpRect, 185f, 165f, false, bevelPaint)
-            bevelPaint.color = withAlpha(Color.WHITE, 30)
+            bevelPaint.color = withAlpha(Color.WHITE, 34)
             canvas.drawArc(tmpRect, 5f, 165f, false, bevelPaint)
 
-            // Travel ring, brighter while the stick is in use.
-            strokePaint.color = withAlpha(if (pressed) accentColor else outlineColor, if (pressed) 180 else 90)
+            // Travel ring, lit while the stick is in hand.
+            strokePaint.color =
+                withAlpha(if (pressed) accentColor else outlineColor, if (pressed) 170 else 70)
             canvas.drawCircle(cx, cy, radius * 0.86f, strokePaint)
 
-            // Cap shadow, thrown onto the well floor.
-            moldPaint.color = withAlpha(Color.BLACK, 120)
-            canvas.drawCircle(kx + knobX * 0.06f, ky + radius * 0.09f, capR, moldPaint)
+            // Contact shadow: grows and stretches away as the stick leans.
+            moldPaint.color = withAlpha(Color.BLACK, 150)
+            canvas.drawCircle(
+                kx + knobX * 0.10f,
+                ky + radius * (0.11f + 0.05f * lean),
+                capR * (1.02f + 0.05f * lean),
+                moldPaint
+            )
 
-            // Domed head.
+            // Dome.
             moldPaint.shader = LinearGradient(
-                kx, ky - capR, kx, ky + capR, capLit, capShade, Shader.TileMode.CLAMP
+                kx, ky - capR, kx, ky + capR, capCrown, capSkirt, Shader.TileMode.CLAMP
             )
             canvas.drawCircle(kx, ky, capR, moldPaint)
             moldPaint.shader = null
 
-            // Grippy outer lip.
-            bevelPaint.strokeWidth = capR * 0.16f
-            bevelPaint.color = withAlpha(Color.WHITE, 52)
-            arcRect(kx, ky, capR * 0.92f)
-            canvas.drawArc(tmpRect, 190f, 150f, false, bevelPaint)
-            bevelPaint.color = withAlpha(Color.BLACK, 105)
-            canvas.drawArc(tmpRect, 10f, 150f, false, bevelPaint)
+            // Grippy lip around the head.
+            bevelPaint.strokeWidth = capR * 0.18f
+            bevelPaint.color = withAlpha(Color.WHITE, 78)
+            arcRect(kx, ky, capR * 0.91f)
+            canvas.drawArc(tmpRect, 192f, 148f, false, bevelPaint)
+            bevelPaint.color = withAlpha(Color.BLACK, 135)
+            canvas.drawArc(tmpRect, 12f, 148f, false, bevelPaint)
 
-            // Dished face: darker in the middle, lit on the lower inner edge.
-            moldPaint.color = withAlpha(Color.BLACK, 62)
-            canvas.drawCircle(kx, ky, capR * 0.62f, moldPaint)
-            bevelPaint.strokeWidth = capR * 0.07f
-            bevelPaint.color = withAlpha(Color.WHITE, 26)
-            arcRect(kx, ky, capR * 0.62f)
-            canvas.drawArc(tmpRect, 15f, 150f, false, bevelPaint)
+            // Concave face: shadowed near wall, lit far wall.
+            moldPaint.color = withAlpha(Color.BLACK, 92)
+            canvas.drawCircle(kx, ky, capR * 0.60f, moldPaint)
+            bevelPaint.strokeWidth = capR * 0.13f
+            bevelPaint.color = withAlpha(Color.WHITE, 40)
+            arcRect(kx, ky, capR * 0.57f)
+            canvas.drawArc(tmpRect, 20f, 140f, false, bevelPaint)
+            bevelPaint.color = withAlpha(Color.BLACK, 90)
+            canvas.drawArc(tmpRect, 200f, 140f, false, bevelPaint)
+
+            // Crown glint.
+            bevelPaint.strokeWidth = capR * 0.15f
+            bevelPaint.color = withAlpha(Color.WHITE, 46)
+            arcRect(kx, ky - capR * 0.06f, capR * 0.80f)
+            canvas.drawArc(tmpRect, 208f, 96f, false, bevelPaint)
         }
     }
 
@@ -596,6 +621,11 @@ class ControllerView @JvmOverloads constructor(
     private val capPressedDeep = Color.parseColor("#171A24")
     private val capPressedRise = Color.parseColor("#343A52")
     private val socketColor = Color.parseColor("#0C0E15")
+    private val wellColor = Color.parseColor("#090B11")
+    // Sticks read as taller than the flat caps, so they get a brighter crown
+    // and a deeper skirt than the button gradient.
+    private val capCrown = Color.parseColor("#585F80")
+    private val capSkirt = Color.parseColor("#1B1E2A")
 
     private fun arcRect(x: Float, y: Float, r: Float) {
         tmpRect.set(x - r, y - r, x + r, y + r)
