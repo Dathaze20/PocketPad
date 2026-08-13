@@ -2,12 +2,14 @@ package com.dathaze.pocketpad.ui
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.Shader
+import kotlin.math.max
 import android.os.SystemClock
 import android.util.AttributeSet
 import android.view.MotionEvent
@@ -440,6 +442,50 @@ class ControllerView @JvmOverloads constructor(
     var isEditingLayout = false
         private set
 
+    // ------------------------------------------------- custom background
+
+    private var bgBitmap: Bitmap? = null
+    private var bgPanX = 0.5f
+    private var bgPanY = 0.5f
+    private val bgBitmapPaint = Paint(Paint.FILTER_BITMAP_FLAG)
+    // Tint between picture and controls so buttons always stay readable.
+    private val scrimColor = Color.argb(110, 6, 7, 12)
+
+    /** True while the user is dragging the background picture into place. */
+    var isPanningBackground = false
+        private set
+
+    val hasBackgroundImage: Boolean get() = bgBitmap != null
+
+    /** Set (or clear, with null) the custom background picture. */
+    fun setBackgroundImage(bitmap: Bitmap?, panX: Float, panY: Float) {
+        bgBitmap = bitmap
+        bgPanX = panX.coerceIn(0f, 1f)
+        bgPanY = panY.coerceIn(0f, 1f)
+        invalidate()
+    }
+
+    fun enterBackgroundPanMode() {
+        releaseAllPointers()
+        isPanningBackground = true
+        invalidate()
+    }
+
+    /** Exit pan mode, returning the chosen position to persist. */
+    fun finishBackgroundPan(): Pair<Float, Float> {
+        isPanningBackground = false
+        invalidate()
+        return bgPanX to bgPanY
+    }
+
+    fun setBackgroundPan(panX: Float, panY: Float) {
+        bgPanX = panX.coerceIn(0f, 1f)
+        bgPanY = panY.coerceIn(0f, 1f)
+        invalidate()
+    }
+
+    fun centerBackground() = setBackgroundPan(0.5f, 0.5f)
+
     fun enterLayoutEditMode() {
         releaseAllPointers()
         isEditingLayout = true
@@ -752,6 +798,7 @@ class ControllerView @JvmOverloads constructor(
     override fun onDraw(canvas: Canvas) {
         ensureBackground()
         canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), bgPaint)
+        drawBackgroundImage(canvas)
         for (control in activeControls) control.draw(canvas)
         if (isEditingLayout) {
             // Accent ring marks every control as grabbable.
@@ -766,6 +813,29 @@ class ControllerView @JvmOverloads constructor(
 
     private fun withAlpha(color: Int, alpha: Int): Int =
         (color and 0x00FFFFFF) or (alpha shl 24)
+
+    /**
+     * Center-crop the picture to fill the screen; [bgPanX]/[bgPanY] slide it
+     * inside the overflow so the user can frame it however they like. The
+     * scrim on top keeps the controls readable over any photo.
+     */
+    private fun drawBackgroundImage(canvas: Canvas) {
+        val bmp = bgBitmap ?: return
+        val vw = width.toFloat()
+        val vh = height.toFloat()
+        if (vw <= 0f || vh <= 0f) return
+        val scale = max(vw / bmp.width, vh / bmp.height)
+        val dw = bmp.width * scale
+        val dh = bmp.height * scale
+        val dx = -(dw - vw) * bgPanX
+        val dy = -(dh - vh) * bgPanY
+        canvas.save()
+        canvas.translate(dx, dy)
+        canvas.scale(scale, scale)
+        canvas.drawBitmap(bmp, 0f, 0f, bgBitmapPaint)
+        canvas.restore()
+        canvas.drawColor(scrimColor)
+    }
 
     private fun drawArrow(canvas: Canvas, x: Float, y: Float, size: Float, rotation: Float) {
         arrowPath.reset()
@@ -784,6 +854,10 @@ class ControllerView @JvmOverloads constructor(
 
     @SuppressLint("ClickableViewAccessibility")
     override fun onTouchEvent(event: MotionEvent): Boolean {
+        if (isPanningBackground) {
+            handleBackgroundPanTouch(event)
+            return true
+        }
         if (isEditingLayout) {
             handleEditTouch(event)
             return true
@@ -832,6 +906,36 @@ class ControllerView @JvmOverloads constructor(
             }
         }
         return true
+    }
+
+    private var panLastX = 0f
+    private var panLastY = 0f
+
+    /** In background-pan mode, a finger drags the picture, not the buttons. */
+    private fun handleBackgroundPanTouch(event: MotionEvent) {
+        val bmp = bgBitmap ?: return
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                panLastX = event.x
+                panLastY = event.y
+            }
+            MotionEvent.ACTION_MOVE -> {
+                val vw = width.toFloat()
+                val vh = height.toFloat()
+                val scale = max(vw / bmp.width, vh / bmp.height)
+                val overflowX = bmp.width * scale - vw
+                val overflowY = bmp.height * scale - vh
+                if (overflowX > 1f) {
+                    bgPanX = (bgPanX - (event.x - panLastX) / overflowX).coerceIn(0f, 1f)
+                }
+                if (overflowY > 1f) {
+                    bgPanY = (bgPanY - (event.y - panLastY) / overflowY).coerceIn(0f, 1f)
+                }
+                panLastX = event.x
+                panLastY = event.y
+                invalidate()
+            }
+        }
     }
 
     /** In edit mode, fingers drag controls instead of pressing them. */

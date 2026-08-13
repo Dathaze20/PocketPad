@@ -16,6 +16,9 @@ import android.view.MotionEvent
 import android.view.WindowManager
 import android.widget.TextView
 import android.widget.Toast
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
@@ -67,16 +70,33 @@ class MainActivity : AppCompatActivity(),
         controllerView.listener = this
 
         findViewById<android.widget.Button>(R.id.editSave).setOnClickListener {
-            controllerView.saveEditedLayout()
-            finishLayoutEdit()
-            Toast.makeText(this, R.string.edit_saved, Toast.LENGTH_SHORT).show()
+            if (controllerView.isPanningBackground) {
+                saveBackgroundPan()
+            } else {
+                controllerView.saveEditedLayout()
+                finishLayoutEdit()
+                Toast.makeText(this, R.string.edit_saved, Toast.LENGTH_SHORT).show()
+            }
         }
         findViewById<android.widget.Button>(R.id.editReset).setOnClickListener {
-            controllerView.resetLayoutToDefault()
-            Toast.makeText(this, R.string.edit_defaults_restored, Toast.LENGTH_SHORT).show()
+            if (controllerView.isPanningBackground) {
+                controllerView.centerBackground()
+            } else {
+                controllerView.resetLayoutToDefault()
+                Toast.makeText(this, R.string.edit_defaults_restored, Toast.LENGTH_SHORT).show()
+            }
         }
         findViewById<android.widget.Button>(R.id.editCancel).setOnClickListener {
-            controllerView.cancelLayoutEdit()
+            if (controllerView.isPanningBackground) {
+                val prefs = getPreferences(MODE_PRIVATE)
+                controllerView.setBackgroundPan(
+                    prefs.getFloat(PREF_BG_X, 0.5f),
+                    prefs.getFloat(PREF_BG_Y, 0.5f)
+                )
+                controllerView.finishBackgroundPan()
+            } else {
+                controllerView.cancelLayoutEdit()
+            }
             finishLayoutEdit()
         }
 
@@ -84,6 +104,7 @@ class MainActivity : AppCompatActivity(),
         enterImmersiveMode()
 
         restoreControllerPrefs()
+        loadBackgroundImage(resetPan = false)
 
         hidManager = HidGamepadManager(this, this)
         ds3Driver = Ds3UsbDriver(this, this)
@@ -210,6 +231,7 @@ class MainActivity : AppCompatActivity(),
             getString(R.string.action_discoverable),
             getString(R.string.action_skin),
             getString(R.string.action_edit_layout),
+            getString(R.string.action_background),
             getString(R.string.action_haptics),
             getString(
                 if (tvNavigation) R.string.action_tv_nav_on else R.string.action_tv_nav_off
@@ -226,11 +248,12 @@ class MainActivity : AppCompatActivity(),
                     1 -> makeDiscoverable()
                     2 -> showSkinPicker()
                     3 -> startLayoutEdit()
-                    4 -> showHapticsPicker()
-                    5 -> toggleTvNavigation()
-                    6 -> startActivity(Intent(android.provider.Settings.ACTION_BLUETOOTH_SETTINGS))
-                    7 -> hidManager.disconnect()
-                    8 -> showHelp()
+                    4 -> showBackgroundMenu()
+                    5 -> showHapticsPicker()
+                    6 -> toggleTvNavigation()
+                    7 -> startActivity(Intent(android.provider.Settings.ACTION_BLUETOOTH_SETTINGS))
+                    8 -> hidManager.disconnect()
+                    9 -> showHelp()
                 }
             }
             .setNegativeButton(android.R.string.cancel, null)
@@ -247,6 +270,106 @@ class MainActivity : AppCompatActivity(),
     private fun finishLayoutEdit() {
         editBar.visibility = android.view.View.GONE
         statusView.visibility = android.view.View.VISIBLE
+    }
+
+    // ---------------------------------------------------- background picture
+
+    private fun backgroundFile() = java.io.File(filesDir, "controller_bg.jpg")
+
+    private val photoPicker = registerForActivityResult(
+        ActivityResultContracts.PickVisualMedia()
+    ) { uri ->
+        if (uri == null) return@registerForActivityResult
+        try {
+            contentResolver.openInputStream(uri)?.use { input ->
+                backgroundFile().outputStream().use { output -> input.copyTo(output) }
+            }
+            loadBackgroundImage(resetPan = true)
+            startBackgroundPan()
+        } catch (e: Exception) {
+            Toast.makeText(this, R.string.bg_load_failed, Toast.LENGTH_LONG).show()
+        }
+    }
+
+    /** Decode the saved picture at roughly screen resolution (avoids OOM). */
+    private fun loadBackgroundImage(resetPan: Boolean) {
+        val file = backgroundFile()
+        if (!file.exists()) return
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeFile(file.path, bounds)
+        val targetLongSide = resources.displayMetrics.let { maxOf(it.widthPixels, it.heightPixels) }
+        var sample = 1
+        while (maxOf(bounds.outWidth, bounds.outHeight) / (sample * 2) >= targetLongSide) {
+            sample *= 2
+        }
+        val bitmap: Bitmap? = BitmapFactory.decodeFile(
+            file.path,
+            BitmapFactory.Options().apply { inSampleSize = sample }
+        )
+        if (bitmap == null) {
+            Toast.makeText(this, R.string.bg_load_failed, Toast.LENGTH_LONG).show()
+            return
+        }
+        val prefs = getPreferences(MODE_PRIVATE)
+        if (resetPan) {
+            prefs.edit().putFloat(PREF_BG_X, 0.5f).putFloat(PREF_BG_Y, 0.5f).apply()
+        }
+        controllerView.setBackgroundImage(
+            bitmap,
+            prefs.getFloat(PREF_BG_X, 0.5f),
+            prefs.getFloat(PREF_BG_Y, 0.5f)
+        )
+    }
+
+    private fun startBackgroundPan() {
+        controllerView.enterBackgroundPanMode()
+        editBar.visibility = android.view.View.VISIBLE
+        statusView.visibility = android.view.View.GONE
+        Toast.makeText(this, R.string.bg_hint, Toast.LENGTH_LONG).show()
+    }
+
+    private fun saveBackgroundPan() {
+        val (panX, panY) = controllerView.finishBackgroundPan()
+        getPreferences(MODE_PRIVATE).edit()
+            .putFloat(PREF_BG_X, panX)
+            .putFloat(PREF_BG_Y, panY)
+            .apply()
+        finishLayoutEdit()
+        Toast.makeText(this, R.string.bg_saved, Toast.LENGTH_SHORT).show()
+    }
+
+    private fun removeBackground() {
+        backgroundFile().delete()
+        controllerView.setBackgroundImage(null, 0.5f, 0.5f)
+        Toast.makeText(this, R.string.bg_removed, Toast.LENGTH_SHORT).show()
+    }
+
+    private fun showBackgroundMenu() {
+        val hasImage = controllerView.hasBackgroundImage
+        val items = if (hasImage) {
+            arrayOf(
+                getString(R.string.bg_choose),
+                getString(R.string.bg_adjust),
+                getString(R.string.bg_remove)
+            )
+        } else {
+            arrayOf(getString(R.string.bg_choose))
+        }
+        AlertDialog.Builder(this)
+            .setTitle(R.string.action_background)
+            .setItems(items) { _, which ->
+                when {
+                    which == 0 -> photoPicker.launch(
+                        PickVisualMediaRequest(
+                            ActivityResultContracts.PickVisualMedia.ImageOnly
+                        )
+                    )
+                    which == 1 && hasImage -> startBackgroundPan()
+                    which == 2 && hasImage -> removeBackground()
+                }
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
     }
 
     private fun toggleTvNavigation() {
@@ -588,6 +711,8 @@ class MainActivity : AppCompatActivity(),
     private companion object {
         const val REQUEST_BLUETOOTH = 101
         const val PREF_TV_NAV = "tv_navigation"
+        const val PREF_BG_X = "background_pan_x"
+        const val PREF_BG_Y = "background_pan_y"
         const val PREF_LAST_DEVICE = "last_device_address"
         const val PREF_SKIN = "controller_skin"
         const val PREF_HAPTICS = "haptics_level"

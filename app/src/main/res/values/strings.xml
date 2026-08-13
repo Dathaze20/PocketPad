@@ -27,6 +27,14 @@
     <string name="discoverable_declined">Pairing mode was not turned on — tap Allow when Android asks to make the phone visible</string>
     <string name="status_discoverable">Visible to your TV — pair from the TV now</string>
     <string name="action_edit_layout">Move buttons…</string>
+    <string name="action_background">Background picture…</string>
+    <string name="bg_choose">Choose a picture</string>
+    <string name="bg_adjust">Adjust position</string>
+    <string name="bg_remove">Remove picture</string>
+    <string name="bg_hint">Drag the picture to frame it — buttons always stay on top. DEFAULT centers it.</string>
+    <string name="bg_saved">Background saved</string>
+    <string name="bg_removed">Background removed</string>
+    <string name="bg_load_failed">Couldn\'t load that picture — try another one</string>
     <string name="edit_save">SAVE</string>
     <string name="edit_reset">DEFAULT</string>
     <string name="edit_cancel">CANCEL</string>
