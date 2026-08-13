@@ -459,7 +459,13 @@ class ControllerView @JvmOverloads constructor(
 
     /** Set (or clear, with null) the custom background picture. */
     fun setBackgroundImage(bitmap: Bitmap?, panX: Float, panY: Float) {
+        val previous = bgBitmap
         bgBitmap = bitmap
+        // Free the picture being replaced instead of waiting on the collector;
+        // full-screen bitmaps are several megabytes each.
+        if (previous != null && previous !== bitmap && !previous.isRecycled) {
+            previous.recycle()
+        }
         bgPanX = panX.coerceIn(0f, 1f)
         bgPanY = panY.coerceIn(0f, 1f)
         invalidate()

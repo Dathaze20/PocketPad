@@ -103,11 +103,13 @@ class MainActivity : AppCompatActivity(),
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         enterImmersiveMode()
 
-        restoreControllerPrefs()
-        loadBackgroundImage(resetPan = false)
-
+        // Build the Bluetooth manager before restoring preferences: applying a
+        // saved skin fires onTouchStateChanged, which sends through hidManager.
         hidManager = HidGamepadManager(this, this)
         ds3Driver = Ds3UsbDriver(this, this)
+
+        restoreControllerPrefs()
+        loadBackgroundImage(resetPan = false)
 
         if (hasBluetoothPermissions()) {
             startHid()
@@ -127,7 +129,7 @@ class MainActivity : AppCompatActivity(),
     override fun onResume() {
         super.onResume()
         // If Bluetooth was off at launch, retry once the user comes back.
-        if (hasBluetoothPermissions()) hidManager.start()
+        if (::hidManager.isInitialized && hasBluetoothPermissions()) hidManager.start()
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
@@ -137,8 +139,10 @@ class MainActivity : AppCompatActivity(),
 
     override fun onDestroy() {
         super.onDestroy()
-        ds3Driver.release()
-        hidManager.stop()
+        // Guarded so a failure during onCreate can't turn into a second crash.
+        if (::ds3Driver.isInitialized) ds3Driver.release()
+        if (::hidManager.isInitialized) hidManager.stop()
+        controllerView.setBackgroundImage(null, 0.5f, 0.5f)
     }
 
     private fun enterImmersiveMode() {
@@ -515,6 +519,8 @@ class MainActivity : AppCompatActivity(),
     }
 
     private fun sendMerged() {
+        // The view can emit state before onCreate finishes wiring things up.
+        if (!::hidManager.isInitialized) return
         GamepadState.merge(controllerView.touchState, externalState, mergedState)
         hidManager.send(mergedState)
         if (tvNavigation) hidManager.sendKey(navKeyFor(mergedState))

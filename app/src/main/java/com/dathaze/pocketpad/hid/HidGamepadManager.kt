@@ -87,6 +87,10 @@ class HidGamepadManager(private val context: Context, private val listener: List
         connectedDevice = null
         registered = false
         started = false
+        lastReport = null
+        lastKey = HidConstants.KEY_NONE
+        // The callback executor owns a live thread; let it go with the app.
+        executor.shutdown()
     }
 
     /** Bonded (paired) devices, for the "connect to paired device" picker. */
