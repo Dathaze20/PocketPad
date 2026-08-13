@@ -9,6 +9,42 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
 
+    <LinearLayout
+        android:id="@+id/editBar"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_horizontal|top"
+        android:layout_marginTop="40dp"
+        android:orientation="horizontal"
+        android:background="@drawable/status_pill"
+        android:padding="6dp"
+        android:visibility="gone">
+
+        <Button
+            android:id="@+id/editSave"
+            style="?android:attr/borderlessButtonStyle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="@color/pp_accent"
+            android:text="@string/edit_save" />
+
+        <Button
+            android:id="@+id/editReset"
+            style="?android:attr/borderlessButtonStyle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="@color/pp_text"
+            android:text="@string/edit_reset" />
+
+        <Button
+            android:id="@+id/editCancel"
+            style="?android:attr/borderlessButtonStyle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="@color/pp_text_dim"
+            android:text="@string/edit_cancel" />
+    </LinearLayout>
+
     <TextView
         android:id="@+id/status"
         android:layout_width="wrap_content"

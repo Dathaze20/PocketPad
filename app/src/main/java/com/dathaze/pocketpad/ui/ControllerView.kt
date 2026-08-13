@@ -422,6 +422,84 @@ class ControllerView @JvmOverloads constructor(
 
     private var activeControls: List<Control> = emptyList()
 
+    // ---------------------------------------------------- custom layouts
+
+    /** Stable keys for saving each control's position. */
+    private val controlKeys: Map<String, Control> = mapOf(
+        "dpad" to dpad, "lstick" to leftStick, "rstick" to rightStick,
+        "ftop" to faceTop, "fright" to faceRight, "fbottom" to faceBottom,
+        "fleft" to faceLeft, "l1" to btnL1, "l2" to btnL2, "r1" to btnR1,
+        "r2" to btnR2, "l3" to btnL3, "r3" to btnR3, "share" to btnShare,
+        "options" to btnOptions, "home" to btnHome, "gear" to gear
+    )
+
+    private val layoutPrefs =
+        context.getSharedPreferences("pocketpad_layouts", Context.MODE_PRIVATE)
+
+    /** True while the user is dragging buttons around. */
+    var isEditingLayout = false
+        private set
+
+    fun enterLayoutEditMode() {
+        releaseAllPointers()
+        isEditingLayout = true
+        invalidate()
+    }
+
+    /** Persist the current positions for this skin + orientation and exit. */
+    fun saveEditedLayout() {
+        val w = safeWidth()
+        val h = safeHeight()
+        if (w > 0 && h > 0) {
+            val serialized = controlKeys.entries.joinToString(";") { (key, c) ->
+                "$key:${(c.cx - offX) / w}:${(c.cy - offY) / h}"
+            }
+            layoutPrefs.edit().putString(layoutPrefKey(), serialized).apply()
+        }
+        isEditingLayout = false
+        invalidate()
+    }
+
+    /** Forget the saved layout for this skin + orientation; back to default. */
+    fun resetLayoutToDefault() {
+        layoutPrefs.edit().remove(layoutPrefKey()).apply()
+        relayout()
+        invalidate()
+    }
+
+    /** Exit without saving; reload whatever was stored (or the default). */
+    fun cancelLayoutEdit() {
+        isEditingLayout = false
+        relayout()
+        invalidate()
+    }
+
+    private fun layoutPrefKey(): String =
+        "${skin.name}_${if (height >= width) "P" else "L"}"
+
+    private fun safeWidth() = (width - safeLeft - safeRight).coerceAtLeast(1f)
+    private fun safeHeight() = (height - safeTop - safeBottom).coerceAtLeast(1f)
+
+    private fun relayout() {
+        if (width > 0 && height > 0) layoutControls(width.toFloat(), height.toFloat())
+    }
+
+    /** Re-apply a user-saved layout on top of the defaults. */
+    private fun applySavedLayout() {
+        val saved = layoutPrefs.getString(layoutPrefKey(), null) ?: return
+        val w = safeWidth()
+        val h = safeHeight()
+        for (entry in saved.split(';')) {
+            val parts = entry.split(':')
+            if (parts.size != 3) continue
+            val control = controlKeys[parts[0]] ?: continue
+            val fx = parts[1].toFloatOrNull() ?: continue
+            val fy = parts[2].toFloatOrNull() ?: continue
+            control.cx = offX + fx * w
+            control.cy = offY + fy * h
+        }
+    }
+
     // Safe-area offsets so controls avoid the camera cutout and gesture bars.
     private var safeLeft = 0f
     private var safeTop = 0f
@@ -524,6 +602,7 @@ class ControllerView @JvmOverloads constructor(
             Skin.NES, Skin.GAMEBOY ->
                 if (portrait) layoutRetroPortrait(w, h) else layoutRetroLandscape(w, h)
         }
+        applySavedLayout()
     }
 
     private fun place(c: Control, x: Float, y: Float, r: Float) {
@@ -533,39 +612,41 @@ class ControllerView @JvmOverloads constructor(
     }
 
     // ------------------------------------------------------------ PS layouts
+    // The top ~8% of the safe area stays empty for the status pill, and no
+    // control sits inside another's halo — spacing modeled on a real pad.
 
     private fun layoutPsPortrait(w: Float, h: Float) {
         val small = w * 0.075f
         val face = w * 0.085f
-        place(btnL1, w * 0.10f, h * 0.06f, small)
-        place(btnL2, w * 0.26f, h * 0.06f, small)
-        place(btnR1, w * 0.90f, h * 0.06f, small)
-        place(btnR2, w * 0.74f, h * 0.06f, small)
-        place(dpad, w * 0.26f, h * 0.24f, w * 0.19f)
+        place(btnL1, w * 0.10f, h * 0.10f, small)
+        place(btnL2, w * 0.26f, h * 0.10f, small)
+        place(btnR2, w * 0.74f, h * 0.10f, small)
+        place(btnR1, w * 0.90f, h * 0.10f, small)
+        place(dpad, w * 0.26f, h * 0.28f, w * 0.19f)
         val fx = w * 0.74f
-        val fy = h * 0.24f
+        val fy = h * 0.28f
         val off = w * 0.125f
         place(faceTop, fx, fy - off, face)
         place(faceRight, fx + off, fy, face)
         place(faceBottom, fx, fy + off, face)
         place(faceLeft, fx - off, fy, face)
-        place(leftStick, w * 0.28f, h * 0.52f, w * 0.155f)
-        place(rightStick, w * 0.72f, h * 0.52f, w * 0.155f)
-        place(btnL3, w * 0.5f, h * 0.455f, small * 0.8f)
-        place(btnR3, w * 0.5f, h * 0.585f, small * 0.8f)
-        place(btnShare, w * 0.30f, h * 0.72f, small)
-        place(btnHome, w * 0.50f, h * 0.72f, small * 1.2f)
-        place(btnOptions, w * 0.70f, h * 0.72f, small)
-        place(gear, w * 0.10f, h * 0.72f, small * 0.9f)
+        place(leftStick, w * 0.28f, h * 0.56f, w * 0.155f)
+        place(rightStick, w * 0.72f, h * 0.56f, w * 0.155f)
+        place(btnL3, w * 0.5f, h * 0.495f, small * 0.8f)
+        place(btnR3, w * 0.5f, h * 0.625f, small * 0.8f)
+        place(btnShare, w * 0.24f, h * 0.79f, small)
+        place(btnHome, w * 0.50f, h * 0.79f, small * 1.2f)
+        place(btnOptions, w * 0.76f, h * 0.79f, small)
+        place(gear, w * 0.08f, h * 0.92f, small * 0.9f)
     }
 
     private fun layoutPsLandscape(w: Float, h: Float) {
         val small = h * 0.075f
         val face = h * 0.10f
-        place(btnL2, w * 0.055f, h * 0.12f, small)
-        place(btnL1, w * 0.145f, h * 0.12f, small)
-        place(btnR1, w * 0.855f, h * 0.12f, small)
-        place(btnR2, w * 0.945f, h * 0.12f, small)
+        place(btnL2, w * 0.055f, h * 0.14f, small)
+        place(btnL1, w * 0.145f, h * 0.14f, small)
+        place(btnR1, w * 0.855f, h * 0.14f, small)
+        place(btnR2, w * 0.945f, h * 0.14f, small)
         place(dpad, w * 0.135f, h * 0.52f, min(w, h) * 0.21f)
         val fx = w * 0.865f
         val fy = h * 0.52f
@@ -576,12 +657,12 @@ class ControllerView @JvmOverloads constructor(
         place(faceLeft, fx - off, fy, face)
         place(leftStick, w * 0.335f, h * 0.70f, h * 0.17f)
         place(rightStick, w * 0.665f, h * 0.70f, h * 0.17f)
-        place(btnL3, w * 0.44f, h * 0.88f, small * 0.8f)
-        place(btnR3, w * 0.56f, h * 0.88f, small * 0.8f)
-        place(btnShare, w * 0.42f, h * 0.14f, small)
-        place(btnHome, w * 0.50f, h * 0.18f, small * 1.2f)
-        place(btnOptions, w * 0.58f, h * 0.14f, small)
-        place(gear, w * 0.045f, h * 0.88f, small * 0.9f)
+        place(btnL3, w * 0.44f, h * 0.92f, small * 0.8f)
+        place(btnR3, w * 0.56f, h * 0.92f, small * 0.8f)
+        place(btnShare, w * 0.38f, h * 0.22f, small)
+        place(btnHome, w * 0.50f, h * 0.44f, small * 1.2f)
+        place(btnOptions, w * 0.62f, h * 0.22f, small)
+        place(gear, w * 0.045f, h * 0.90f, small * 0.9f)
     }
 
     // ---------------------------------------------------------- SNES layouts
@@ -589,27 +670,27 @@ class ControllerView @JvmOverloads constructor(
     private fun layoutSnesPortrait(w: Float, h: Float) {
         val small = w * 0.08f
         val face = w * 0.09f
-        place(btnL1, w * 0.12f, h * 0.06f, small)
-        place(btnR1, w * 0.88f, h * 0.06f, small)
-        place(dpad, w * 0.26f, h * 0.28f, w * 0.20f)
+        place(btnL1, w * 0.12f, h * 0.10f, small)
+        place(btnR1, w * 0.88f, h * 0.10f, small)
+        place(dpad, w * 0.26f, h * 0.30f, w * 0.20f)
         val fx = w * 0.74f
-        val fy = h * 0.28f
+        val fy = h * 0.30f
         val off = w * 0.13f
         place(faceTop, fx, fy - off, face)
         place(faceRight, fx + off, fy, face)
         place(faceBottom, fx, fy + off, face)
         place(faceLeft, fx - off, fy, face)
-        place(btnShare, w * 0.34f, h * 0.52f, small)
-        place(btnOptions, w * 0.66f, h * 0.52f, small)
-        place(btnHome, w * 0.50f, h * 0.64f, small)
-        place(gear, w * 0.10f, h * 0.64f, small * 0.9f)
+        place(btnShare, w * 0.28f, h * 0.56f, small)
+        place(btnOptions, w * 0.72f, h * 0.56f, small)
+        place(btnHome, w * 0.50f, h * 0.70f, small)
+        place(gear, w * 0.08f, h * 0.92f, small * 0.9f)
     }
 
     private fun layoutSnesLandscape(w: Float, h: Float) {
         val small = h * 0.08f
         val face = h * 0.105f
-        place(btnL1, w * 0.09f, h * 0.12f, small)
-        place(btnR1, w * 0.91f, h * 0.12f, small)
+        place(btnL1, w * 0.09f, h * 0.14f, small)
+        place(btnR1, w * 0.91f, h * 0.14f, small)
         place(dpad, w * 0.16f, h * 0.58f, min(w, h) * 0.22f)
         val fx = w * 0.84f
         val fy = h * 0.58f
@@ -618,10 +699,10 @@ class ControllerView @JvmOverloads constructor(
         place(faceRight, fx + off, fy, face)
         place(faceBottom, fx, fy + off, face)
         place(faceLeft, fx - off, fy, face)
-        place(btnShare, w * 0.42f, h * 0.16f, small)
-        place(btnOptions, w * 0.58f, h * 0.16f, small)
-        place(btnHome, w * 0.50f, h * 0.55f, small)
-        place(gear, w * 0.05f, h * 0.88f, small * 0.9f)
+        place(btnShare, w * 0.38f, h * 0.24f, small)
+        place(btnOptions, w * 0.62f, h * 0.24f, small)
+        place(btnHome, w * 0.50f, h * 0.52f, small)
+        place(gear, w * 0.05f, h * 0.90f, small * 0.9f)
     }
 
     // ------------------------------------------------- NES / Game Boy layouts
@@ -629,14 +710,14 @@ class ControllerView @JvmOverloads constructor(
     private fun layoutRetroPortrait(w: Float, h: Float) {
         val small = w * 0.08f
         val face = w * 0.105f
-        place(dpad, w * 0.26f, h * 0.30f, w * 0.20f)
+        place(dpad, w * 0.26f, h * 0.32f, w * 0.20f)
         // A high on the right, B lower-left of it — Game Boy diagonal.
-        place(faceRight, w * 0.82f, h * 0.25f, face)
-        place(faceBottom, w * 0.62f, h * 0.35f, face)
-        place(btnShare, w * 0.34f, h * 0.54f, small)
-        place(btnOptions, w * 0.66f, h * 0.54f, small)
-        place(btnHome, w * 0.50f, h * 0.66f, small)
-        place(gear, w * 0.10f, h * 0.66f, small * 0.9f)
+        place(faceRight, w * 0.82f, h * 0.27f, face)
+        place(faceBottom, w * 0.62f, h * 0.38f, face)
+        place(btnShare, w * 0.28f, h * 0.58f, small)
+        place(btnOptions, w * 0.72f, h * 0.58f, small)
+        place(btnHome, w * 0.50f, h * 0.71f, small)
+        place(gear, w * 0.08f, h * 0.92f, small * 0.9f)
     }
 
     private fun layoutRetroLandscape(w: Float, h: Float) {
@@ -644,11 +725,11 @@ class ControllerView @JvmOverloads constructor(
         val face = h * 0.115f
         place(dpad, w * 0.16f, h * 0.55f, min(w, h) * 0.22f)
         place(faceRight, w * 0.89f, h * 0.44f, face)
-        place(faceBottom, w * 0.76f, h * 0.62f, face)
-        place(btnShare, w * 0.42f, h * 0.16f, small)
-        place(btnOptions, w * 0.58f, h * 0.16f, small)
-        place(btnHome, w * 0.50f, h * 0.60f, small)
-        place(gear, w * 0.05f, h * 0.88f, small * 0.9f)
+        place(faceBottom, w * 0.76f, h * 0.63f, face)
+        place(btnShare, w * 0.38f, h * 0.20f, small)
+        place(btnOptions, w * 0.62f, h * 0.20f, small)
+        place(btnHome, w * 0.50f, h * 0.48f, small)
+        place(gear, w * 0.05f, h * 0.90f, small * 0.9f)
     }
 
     // --------------------------------------------------------------- drawing
@@ -672,6 +753,15 @@ class ControllerView @JvmOverloads constructor(
         ensureBackground()
         canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), bgPaint)
         for (control in activeControls) control.draw(canvas)
+        if (isEditingLayout) {
+            // Accent ring marks every control as grabbable.
+            strokePaint.color = accentColor
+            for (control in activeControls) {
+                strokePaint.alpha = if (control.pressed) 255 else 120
+                canvas.drawCircle(control.cx, control.cy, control.radius * 1.08f, strokePaint)
+            }
+            strokePaint.alpha = 255
+        }
     }
 
     private fun withAlpha(color: Int, alpha: Int): Int =
@@ -694,6 +784,10 @@ class ControllerView @JvmOverloads constructor(
 
     @SuppressLint("ClickableViewAccessibility")
     override fun onTouchEvent(event: MotionEvent): Boolean {
+        if (isEditingLayout) {
+            handleEditTouch(event)
+            return true
+        }
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_DOWN -> {
                 val index = event.actionIndex
@@ -738,6 +832,45 @@ class ControllerView @JvmOverloads constructor(
             }
         }
         return true
+    }
+
+    /** In edit mode, fingers drag controls instead of pressing them. */
+    private fun handleEditTouch(event: MotionEvent) {
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_DOWN -> {
+                val index = event.actionIndex
+                val x = event.getX(index)
+                val y = event.getY(index)
+                val control = activeControls.firstOrNull { !it.pressed && it.contains(x, y) }
+                if (control != null) {
+                    control.pointerId = event.getPointerId(index)
+                    haptics.tick()
+                    invalidate()
+                }
+            }
+
+            MotionEvent.ACTION_MOVE -> {
+                for (i in 0 until event.pointerCount) {
+                    val id = event.getPointerId(i)
+                    val control = activeControls.firstOrNull { it.pointerId == id } ?: continue
+                    control.cx = event.getX(i)
+                        .coerceIn(safeLeft + control.radius, width - safeRight - control.radius)
+                    control.cy = event.getY(i)
+                        .coerceIn(safeTop + control.radius, height - safeBottom - control.radius)
+                }
+                invalidate()
+            }
+
+            MotionEvent.ACTION_POINTER_UP, MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                if (event.actionMasked == MotionEvent.ACTION_CANCEL) {
+                    for (control in activeControls) control.pointerId = -1
+                } else {
+                    val id = event.getPointerId(event.actionIndex)
+                    activeControls.firstOrNull { it.pointerId == id }?.pointerId = -1
+                }
+                invalidate()
+            }
+        }
     }
 
     private fun notifyChanged() {

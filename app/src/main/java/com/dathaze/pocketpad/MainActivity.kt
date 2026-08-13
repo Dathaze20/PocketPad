@@ -40,6 +40,7 @@ class MainActivity : AppCompatActivity(),
 
     private lateinit var controllerView: ControllerView
     private lateinit var statusView: TextView
+    private lateinit var editBar: android.widget.LinearLayout
     private lateinit var hidManager: HidGamepadManager
     private lateinit var ds3Driver: Ds3UsbDriver
 
@@ -62,7 +63,22 @@ class MainActivity : AppCompatActivity(),
 
         controllerView = findViewById(R.id.controller)
         statusView = findViewById(R.id.status)
+        editBar = findViewById(R.id.editBar)
         controllerView.listener = this
+
+        findViewById<android.widget.Button>(R.id.editSave).setOnClickListener {
+            controllerView.saveEditedLayout()
+            finishLayoutEdit()
+            Toast.makeText(this, R.string.edit_saved, Toast.LENGTH_SHORT).show()
+        }
+        findViewById<android.widget.Button>(R.id.editReset).setOnClickListener {
+            controllerView.resetLayoutToDefault()
+            Toast.makeText(this, R.string.edit_defaults_restored, Toast.LENGTH_SHORT).show()
+        }
+        findViewById<android.widget.Button>(R.id.editCancel).setOnClickListener {
+            controllerView.cancelLayoutEdit()
+            finishLayoutEdit()
+        }
 
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         enterImmersiveMode()
@@ -193,6 +209,7 @@ class MainActivity : AppCompatActivity(),
             getString(R.string.action_connect_paired),
             getString(R.string.action_discoverable),
             getString(R.string.action_skin),
+            getString(R.string.action_edit_layout),
             getString(R.string.action_haptics),
             getString(
                 if (tvNavigation) R.string.action_tv_nav_on else R.string.action_tv_nav_off
@@ -208,15 +225,28 @@ class MainActivity : AppCompatActivity(),
                     0 -> showPairedDevicePicker()
                     1 -> makeDiscoverable()
                     2 -> showSkinPicker()
-                    3 -> showHapticsPicker()
-                    4 -> toggleTvNavigation()
-                    5 -> startActivity(Intent(android.provider.Settings.ACTION_BLUETOOTH_SETTINGS))
-                    6 -> hidManager.disconnect()
-                    7 -> showHelp()
+                    3 -> startLayoutEdit()
+                    4 -> showHapticsPicker()
+                    5 -> toggleTvNavigation()
+                    6 -> startActivity(Intent(android.provider.Settings.ACTION_BLUETOOTH_SETTINGS))
+                    7 -> hidManager.disconnect()
+                    8 -> showHelp()
                 }
             }
             .setNegativeButton(android.R.string.cancel, null)
             .show()
+    }
+
+    private fun startLayoutEdit() {
+        controllerView.enterLayoutEditMode()
+        editBar.visibility = android.view.View.VISIBLE
+        statusView.visibility = android.view.View.GONE
+        Toast.makeText(this, R.string.edit_hint, Toast.LENGTH_LONG).show()
+    }
+
+    private fun finishLayoutEdit() {
+        editBar.visibility = android.view.View.GONE
+        statusView.visibility = android.view.View.VISIBLE
     }
 
     private fun toggleTvNavigation() {

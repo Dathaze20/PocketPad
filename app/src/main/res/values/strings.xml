@@ -26,6 +26,13 @@
     <string name="discoverable_hint">Pairing mode on — now pick this phone on your TV (Input Device Manager → Bluetooth Device List)</string>
     <string name="discoverable_declined">Pairing mode was not turned on — tap Allow when Android asks to make the phone visible</string>
     <string name="status_discoverable">Visible to your TV — pair from the TV now</string>
+    <string name="action_edit_layout">Move buttons…</string>
+    <string name="edit_save">SAVE</string>
+    <string name="edit_reset">DEFAULT</string>
+    <string name="edit_cancel">CANCEL</string>
+    <string name="edit_hint">Drag any button where you want it, then tap SAVE. DEFAULT puts everything back.</string>
+    <string name="edit_saved">Layout saved</string>
+    <string name="edit_defaults_restored">Default layout restored</string>
     <string name="action_tv_nav_on">TV navigation: ON (turn off)</string>
     <string name="action_tv_nav_off">TV navigation: OFF (turn on)</string>
     <string name="tv_nav_enabled">TV navigation on — d-pad moves TV menus, ✕ selects, ○ goes back</string>
