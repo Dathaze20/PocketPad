@@ -318,20 +318,24 @@ class ControllerView @JvmOverloads constructor(
         }
 
         /**
-         * A moulded cross in a recessed dish, like the DualShock's. Each arm
-         * is bevelled on its own, separated by cut grooves, and the arm you
-         * are holding sinks and darkens while its arrow lights up.
+         * One moulded cross on a pivot, the way a Game Boy or DualShock pad
+         * works: a single continuous piece with no seams cut through it, sunk
+         * in a shallow dish. Pushing a direction rocks the whole cross that
+         * way — the pressed side dips into shadow and the opposite side lifts
+         * — so a thumb resting in the middle can roll between directions.
          */
         override fun draw(canvas: Canvas) {
             val arm = radius * 0.30f
-            val len = radius * 0.82f
+            val len = radius * 0.84f
             val hat = touchState.hat
             val up = hat == 7 || hat == 0 || hat == 1
             val right = hat == 1 || hat == 2 || hat == 3
             val down = hat == 3 || hat == 4 || hat == 5
             val left = hat == 5 || hat == 6 || hat == 7
 
-            // Recessed dish the cross sits in.
+            ensureCross(arm, len)
+
+            // Shallow housing dish.
             moldPaint.shader = null
             moldPaint.color = socketColor
             canvas.drawCircle(cx, cy + radius * 0.03f, radius, moldPaint)
@@ -342,59 +346,90 @@ class ControllerView @JvmOverloads constructor(
             bevelPaint.color = withAlpha(Color.WHITE, 26)
             canvas.drawArc(tmpRect, 10f, 160f, false, bevelPaint)
 
-            // Cross body, cast shadow first so it lifts off the dish.
-            val round = arm * 0.42f
-            moldPaint.color = withAlpha(Color.BLACK, 105)
-            canvas.drawRoundRect(
-                cx - arm, cy - len + radius * 0.06f, cx + arm, cy + len + radius * 0.06f,
-                round, round, moldPaint
-            )
-            canvas.drawRoundRect(
-                cx - len, cy - arm + radius * 0.06f, cx + len, cy + arm + radius * 0.06f,
-                round, round, moldPaint
-            )
-            moldPaint.shader = crossShader(cy - len, cy + len)
-            canvas.drawRoundRect(cx - arm, cy - len, cx + arm, cy + len, round, round, moldPaint)
-            canvas.drawRoundRect(cx - len, cy - arm, cx + len, cy + arm, round, round, moldPaint)
+            // How far the cross tips, and toward where.
+            val tilt = radius * 0.05f
+            val tx = (if (right) 1f else 0f) - (if (left) 1f else 0f)
+            val ty = (if (down) 1f else 0f) - (if (up) 1f else 0f)
+            val norm = if (tx != 0f && ty != 0f) 0.707f else 1f
+
+            canvas.save()
+            canvas.translate(cx + tx * tilt * norm, cy + ty * tilt * norm)
+
+            // Moulded edge: a dark copy underneath gives the piece thickness.
+            moldPaint.color = withAlpha(Color.BLACK, 150)
+            canvas.save()
+            canvas.translate(0f, radius * 0.055f)
+            canvas.drawPath(crossPath, moldPaint)
+            canvas.restore()
+
+            // The cross itself — one shape, one gradient, no seams.
+            moldPaint.shader = crossShader(-len, len)
+            canvas.drawPath(crossPath, moldPaint)
             moldPaint.shader = null
 
-            // Each held arm sinks into the body.
-            drawArm(canvas, up, cx - arm, cy - len, cx + arm, cy + arm, round)
-            drawArm(canvas, down, cx - arm, cy - arm, cx + arm, cy + len, round)
-            drawArm(canvas, left, cx - len, cy - arm, cx + arm, cy + arm, round)
-            drawArm(canvas, right, cx - arm, cy - arm, cx + len, cy + arm, round)
+            // Bevel: lit along the top edge, shadowed along the bottom.
+            bevelPaint.strokeWidth = radius * 0.055f
+            canvas.save()
+            canvas.clipRect(-len, -len, len, 0f)
+            bevelPaint.color = withAlpha(Color.WHITE, 62)
+            canvas.drawPath(crossPath, bevelPaint)
+            canvas.restore()
+            canvas.save()
+            canvas.clipRect(-len, 0f, len, len)
+            bevelPaint.color = withAlpha(Color.BLACK, 110)
+            canvas.drawPath(crossPath, bevelPaint)
+            canvas.restore()
 
-            // Grooves where the arms meet, plus the dished centre pivot.
-            bevelPaint.strokeWidth = radius * 0.035f
-            bevelPaint.color = withAlpha(Color.BLACK, 165)
-            canvas.drawLine(cx - arm, cy - arm, cx - arm, cy + arm, bevelPaint)
-            canvas.drawLine(cx + arm, cy - arm, cx + arm, cy + arm, bevelPaint)
-            canvas.drawLine(cx - arm, cy - arm, cx + arm, cy - arm, bevelPaint)
-            canvas.drawLine(cx - arm, cy + arm, cx + arm, cy + arm, bevelPaint)
-            moldPaint.color = withAlpha(Color.BLACK, 70)
-            canvas.drawCircle(cx, cy, arm * 0.52f, moldPaint)
-            bevelPaint.strokeWidth = radius * 0.025f
-            bevelPaint.color = withAlpha(Color.WHITE, 24)
-            arcRect(cx, cy, arm * 0.52f)
-            canvas.drawArc(tmpRect, 10f, 160f, false, bevelPaint)
+            // Thumb dish in the middle — a soft depression, not a button.
+            moldPaint.color = withAlpha(Color.BLACK, 46)
+            canvas.drawCircle(0f, 0f, arm * 0.80f, moldPaint)
+            moldPaint.color = withAlpha(Color.BLACK, 34)
+            canvas.drawCircle(0f, 0f, arm * 0.55f, moldPaint)
+            bevelPaint.strokeWidth = radius * 0.022f
+            bevelPaint.color = withAlpha(Color.WHITE, 20)
+            arcRect(0f, 0f, arm * 0.80f)
+            canvas.drawArc(tmpRect, 15f, 150f, false, bevelPaint)
 
-            // Arrows — the live direction glows.
-            drawDirArrow(canvas, cx, cy - len * 0.70f, radius * 0.155f, 0f, up)
-            drawDirArrow(canvas, cx + len * 0.70f, cy, radius * 0.155f, 90f, right)
-            drawDirArrow(canvas, cx, cy + len * 0.70f, radius * 0.155f, 180f, down)
-            drawDirArrow(canvas, cx - len * 0.70f, cy, radius * 0.155f, 270f, left)
+            // The side being pushed sits in shadow; soft, clipped to the piece.
+            if (hat != HidConstants.HAT_NEUTRAL) {
+                canvas.save()
+                canvas.clipPath(crossPath)
+                val px = tx * len * norm
+                val py = ty * len * norm
+                moldPaint.color = withAlpha(Color.BLACK, 52)
+                canvas.drawCircle(px, py, len * 0.95f, moldPaint)
+                canvas.drawCircle(px, py, len * 0.62f, moldPaint)
+                canvas.restore()
+            }
+
+            // Arrows ride with the piece.
+            drawDirArrow(canvas, 0f, -len * 0.70f, radius * 0.150f, 0f, up)
+            drawDirArrow(canvas, len * 0.70f, 0f, radius * 0.150f, 90f, right)
+            drawDirArrow(canvas, 0f, len * 0.70f, radius * 0.150f, 180f, down)
+            drawDirArrow(canvas, -len * 0.70f, 0f, radius * 0.150f, 270f, left)
+
+            canvas.restore()
         }
 
-        private fun drawArm(
-            canvas: Canvas, active: Boolean,
-            l: Float, t: Float, r: Float, b: Float, round: Float
-        ) {
-            if (!active) return
-            moldPaint.shader = null
-            moldPaint.color = withAlpha(Color.BLACK, 120)
-            canvas.drawRoundRect(l, t, r, b, round, round, moldPaint)
-            moldPaint.color = withAlpha(accentColor, 46)
-            canvas.drawRoundRect(l, t, r, b, round, round, moldPaint)
+        /** Cross silhouette, centred on the origin, rebuilt only on resize. */
+        private var crossArm = Float.NaN
+        private var crossLen = Float.NaN
+        private val crossPath = Path()
+
+        private fun ensureCross(arm: Float, len: Float) {
+            if (arm == crossArm && len == crossLen) return
+            crossArm = arm
+            crossLen = len
+            val round = arm * 0.55f
+            crossPath.reset()
+            tmpRect.set(-arm, -len, arm, len)
+            crossPath.addRoundRect(tmpRect, round, round, Path.Direction.CW)
+            scratchPath.reset()
+            tmpRect.set(-len, -arm, len, arm)
+            scratchPath.addRoundRect(tmpRect, round, round, Path.Direction.CW)
+            // Union so the piece has one continuous outline instead of two
+            // overlapping bars with a seam where they cross.
+            crossPath.op(scratchPath, Path.Op.UNION)
         }
 
         private fun drawDirArrow(
@@ -579,6 +614,7 @@ class ControllerView @JvmOverloads constructor(
     private val neonCyan = Color.parseColor("#2BE4FF")
     private val neonGreen = Color.parseColor("#3BFFA8")
     private val arrowPath = Path()
+    private val scratchPath = Path()
 
     // Background gradients: deep navy fading to indigo (Game Boy skin goes green).
     private val bgTop = Color.parseColor("#0C0D16")
@@ -1079,6 +1115,14 @@ class ControllerView @JvmOverloads constructor(
             MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_DOWN -> {
                 val index = event.actionIndex
                 val id = event.getPointerId(index)
+                // Android reuses pointer ids. If a control is somehow still
+                // holding this one, release it first — otherwise two controls
+                // share an id, the lift only clears one, and the other stays
+                // pressed forever.
+                activeControls.firstOrNull { it.pointerId == id }?.let {
+                    it.pointerId = -1
+                    it.onUp()
+                }
                 val x = event.getX(index)
                 val y = event.getY(index)
                 val control = activeControls.firstOrNull { !it.pressed && it.contains(x, y) }
@@ -1101,7 +1145,9 @@ class ControllerView @JvmOverloads constructor(
             }
 
             MotionEvent.ACTION_POINTER_UP, MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                if (event.actionMasked == MotionEvent.ACTION_CANCEL) {
+                // ACTION_UP is the last finger leaving, so nothing may stay
+                // held; CANCEL means the gesture was taken away entirely.
+                if (event.actionMasked != MotionEvent.ACTION_POINTER_UP) {
                     for (control in activeControls) {
                         if (control.pressed) {
                             control.pointerId = -1
@@ -1188,6 +1234,16 @@ class ControllerView @JvmOverloads constructor(
                 invalidate()
             }
         }
+    }
+
+    /**
+     * If the window loses focus mid-press — notification shade, incoming call
+     * — the matching ACTION_UP may never arrive. Releasing here stops a held
+     * button or a deflected stick from being transmitted indefinitely.
+     */
+    override fun onWindowFocusChanged(hasWindowFocus: Boolean) {
+        super.onWindowFocusChanged(hasWindowFocus)
+        if (!hasWindowFocus) releaseAllPointers()
     }
 
     private fun notifyChanged() {
