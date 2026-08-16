@@ -47,8 +47,12 @@ class MainActivity : AppCompatActivity(),
     private lateinit var hidManager: HidGamepadManager
     private lateinit var ds3Driver: Ds3UsbDriver
 
-    /** When on, the pad also sends arrow keys/Enter so it can drive TV menus. */
-    private var tvNavigation = true
+    /**
+     * When on, the pad ALSO sends keyboard keys so it can drive TV menus.
+     * Off by default: while a game is running those keys are duplicate input,
+     * and Escape in particular is read as "quit" by cloud gaming clients.
+     */
+    private var tvNavigation = false
 
     /** State fed by a physical controller (native events or the raw DS3 driver). */
     private val externalState = GamepadState()
@@ -226,7 +230,7 @@ class MainActivity : AppCompatActivity(),
             "LIGHT" -> Haptics.Level.LIGHT
             else -> Haptics.Level.STRONG
         }
-        tvNavigation = prefs.getBoolean(PREF_TV_NAV, true)
+        tvNavigation = prefs.getBoolean(PREF_TV_NAV, false)
     }
 
     @SuppressLint("MissingPermission")
@@ -531,8 +535,9 @@ class MainActivity : AppCompatActivity(),
     }
 
     /**
-     * Keyboard equivalent of the current state, so the pad also drives TV
-     * menus: d-pad → arrow keys, ✕ → Enter, ○ → Back.
+     * Keyboard equivalent of the current state, so the pad can drive TV menus
+     * when the user asks for it: d-pad → arrow keys, ✕/A → Enter, ○/B → Back.
+     * This is deliberately opt-in — see [tvNavigation].
      */
     private fun navKeyFor(state: GamepadState): Byte = when {
         state.isPressed(HidConstants.BTN_CROSS) -> HidConstants.KEY_ENTER
@@ -719,6 +724,7 @@ class MainActivity : AppCompatActivity(),
         statusView.text = getString(R.string.status_connected, name)
         statusView.setTextColor(STATUS_CONNECTED)
         controllerView.linkState = ControllerView.LinkState.CONNECTED
+        if (!tvNavigation) hidManager.sendKey(HidConstants.KEY_NONE)
         device?.let {
             getPreferences(MODE_PRIVATE).edit()
                 .putString(PREF_LAST_DEVICE, it.address)

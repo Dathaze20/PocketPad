@@ -215,9 +215,11 @@ class ControllerView @JvmOverloads constructor(
         override fun onDown(x: Float, y: Float) {
             touchState.setButton(buttonIndex, true)
             setTrigger(255)
+            // Transmit first, buzz second. The vibrator call takes a moment to
+            // return, and doing it first delays the press reaching the host.
+            notifyChanged()
             haptics.press()
             if (isHome) postDelayed(longPressRunnable, 700)
-            notifyChanged()
         }
 
         override fun onUp() {
@@ -321,8 +323,8 @@ class ControllerView @JvmOverloads constructor(
             }
             if (newHat != touchState.hat) {
                 touchState.hat = newHat
-                if (first) haptics.press() else haptics.tick()
                 notifyChanged()
+                if (first) haptics.press() else haptics.tick()
             } else if (first) {
                 haptics.press()
             }
