@@ -51,7 +51,7 @@ class ControllerView @JvmOverloads constructor(
     attrs: AttributeSet? = null
 ) : View(context, attrs) {
 
-    enum class Skin { PS, SNES, NES, GAMEBOY }
+    enum class Skin { PS, XBOX, SNES, NES, GAMEBOY }
 
     /** Connection state shown by the halo around the PS/home button. */
     enum class LinkState { IDLE, DISCOVERABLE, CONNECTED }
@@ -669,6 +669,11 @@ class ControllerView @JvmOverloads constructor(
     private val snesBColor = Color.parseColor("#F4B400")
     private val snesYColor = Color.parseColor("#0F9D58")
 
+    // Xbox face colours (A green, B red, X blue, Y amber)
+    private val xbA = Color.parseColor("#6CC24A")
+    private val xbB = Color.parseColor("#E4472D")
+    private val xbX = Color.parseColor("#2E7BD4")
+    private val xbY = Color.parseColor("#F2C230")
     private val nesColor = Color.parseColor("#E4404A")
     private val gbColor = Color.parseColor("#B48CC8")
 
@@ -859,9 +864,31 @@ class ControllerView @JvmOverloads constructor(
                 faceLeft.label = "□"; faceLeft.labelColor = psSquareColor; faceLeft.labelScale = 1f
                 faceTop.label = "△"; faceTop.labelColor = psTriangleColor; faceTop.labelScale = 1f
                 btnL1.label = "L1"; btnR1.label = "R1"
+                btnL2.label = "L2"; btnR2.label = "R2"
+                btnL3.label = "L3"; btnR3.label = "R3"
                 btnShare.label = "SHARE"; btnShare.labelScale = 0.38f
                 btnOptions.label = "OPTIONS"; btnOptions.labelScale = 0.3f
                 btnHome.label = "PS"
+                activeControls = listOf(
+                    dpad, leftStick, rightStick,
+                    faceTop, faceRight, faceBottom, faceLeft,
+                    btnL1, btnL2, btnR1, btnR2, btnL3, btnR3,
+                    btnShare, btnOptions, btnHome, gear
+                )
+            }
+            Skin.XBOX -> {
+                // Positions are what the host actually reads, and they match
+                // PlayStation one-for-one: bottom/right/left/top = A/B/X/Y.
+                faceBottom.label = "A"; faceBottom.labelColor = xbA; faceBottom.labelScale = 0.9f
+                faceRight.label = "B"; faceRight.labelColor = xbB; faceRight.labelScale = 0.9f
+                faceLeft.label = "X"; faceLeft.labelColor = xbX; faceLeft.labelScale = 0.9f
+                faceTop.label = "Y"; faceTop.labelColor = xbY; faceTop.labelScale = 0.9f
+                btnL1.label = "LB"; btnR1.label = "RB"
+                btnL2.label = "LT"; btnR2.label = "RT"
+                btnL3.label = "LS"; btnR3.label = "RS"
+                btnShare.label = "VIEW"; btnShare.labelScale = 0.4f
+                btnOptions.label = "MENU"; btnOptions.labelScale = 0.4f
+                btnHome.label = "✕BOX"; btnHome.labelScale = 0.44f
                 activeControls = listOf(
                     dpad, leftStick, rightStick,
                     faceTop, faceRight, faceBottom, faceLeft,
@@ -923,6 +950,7 @@ class ControllerView @JvmOverloads constructor(
         val portrait = h >= w
         when (skin) {
             Skin.PS -> if (portrait) layoutPsPortrait(w, h) else layoutPsLandscape(w, h)
+            Skin.XBOX -> if (portrait) layoutXboxPortrait(w, h) else layoutXboxLandscape(w, h)
             Skin.SNES -> if (portrait) layoutSnesPortrait(w, h) else layoutSnesLandscape(w, h)
             Skin.NES, Skin.GAMEBOY ->
                 if (portrait) layoutRetroPortrait(w, h) else layoutRetroLandscape(w, h)
@@ -982,6 +1010,60 @@ class ControllerView @JvmOverloads constructor(
         place(faceLeft, fx - off, fy, face)
         place(leftStick, w * 0.335f, h * 0.68f, h * 0.155f)
         place(rightStick, w * 0.665f, h * 0.68f, h * 0.155f)
+        place(btnL3, w * 0.445f, h * 0.94f, small * 0.78f)
+        place(btnR3, w * 0.555f, h * 0.94f, small * 0.78f)
+        place(btnShare, w * 0.38f, h * 0.22f, small)
+        place(btnHome, w * 0.50f, h * 0.44f, small * 1.2f)
+        place(btnOptions, w * 0.62f, h * 0.22f, small)
+        place(gear, w * 0.045f, h * 0.90f, small * 0.9f)
+    }
+
+    // ----------------------------------------------------------- Xbox layouts
+    // Xbox's signature offset: the left stick takes the high-left position and
+    // the d-pad drops below it, mirrored by the face cluster and right stick.
+
+    private fun layoutXboxPortrait(w: Float, h: Float) {
+        val small = w * 0.072f
+        val face = w * 0.078f
+        place(btnL2, w * 0.10f, h * 0.09f, small)
+        place(btnL1, w * 0.26f, h * 0.09f, small)
+        place(btnR1, w * 0.74f, h * 0.09f, small)
+        place(btnR2, w * 0.90f, h * 0.09f, small)
+        place(leftStick, w * 0.26f, h * 0.26f, w * 0.15f)
+        val fx = w * 0.74f
+        val fy = h * 0.26f
+        val off = w * 0.138f
+        place(faceTop, fx, fy - off, face)
+        place(faceRight, fx + off, fy, face)
+        place(faceBottom, fx, fy + off, face)
+        place(faceLeft, fx - off, fy, face)
+        place(dpad, w * 0.27f, h * 0.52f, w * 0.165f)
+        place(rightStick, w * 0.73f, h * 0.52f, w * 0.15f)
+        place(btnL3, w * 0.5f, h * 0.44f, small * 0.78f)
+        place(btnR3, w * 0.5f, h * 0.60f, small * 0.78f)
+        place(btnShare, w * 0.26f, h * 0.79f, small)
+        place(btnHome, w * 0.50f, h * 0.79f, small * 1.2f)
+        place(btnOptions, w * 0.74f, h * 0.79f, small)
+        place(gear, w * 0.08f, h * 0.92f, small * 0.9f)
+    }
+
+    private fun layoutXboxLandscape(w: Float, h: Float) {
+        val small = h * 0.072f
+        val face = h * 0.092f
+        place(btnL2, w * 0.055f, h * 0.14f, small)
+        place(btnL1, w * 0.145f, h * 0.14f, small)
+        place(btnR1, w * 0.855f, h * 0.14f, small)
+        place(btnR2, w * 0.945f, h * 0.14f, small)
+        place(leftStick, w * 0.135f, h * 0.46f, h * 0.165f)
+        val fx = w * 0.865f
+        val fy = h * 0.46f
+        val off = min(w, h) * 0.168f
+        place(faceTop, fx, fy - off, face)
+        place(faceRight, fx + off, fy, face)
+        place(faceBottom, fx, fy + off, face)
+        place(faceLeft, fx - off, fy, face)
+        place(dpad, w * 0.315f, h * 0.76f, min(w, h) * 0.165f)
+        place(rightStick, w * 0.685f, h * 0.76f, h * 0.155f)
         place(btnL3, w * 0.445f, h * 0.94f, small * 0.78f)
         place(btnR3, w * 0.555f, h * 0.94f, small * 0.78f)
         place(btnShare, w * 0.38f, h * 0.22f, small)

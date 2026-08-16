@@ -215,6 +215,7 @@ class MainActivity : AppCompatActivity(),
     private fun restoreControllerPrefs() {
         val prefs = getPreferences(MODE_PRIVATE)
         controllerView.skin = when (prefs.getString(PREF_SKIN, "PS")) {
+            "XBOX" -> ControllerView.Skin.XBOX
             "SNES" -> ControllerView.Skin.SNES
             "NES" -> ControllerView.Skin.NES
             "GAMEBOY" -> ControllerView.Skin.GAMEBOY
@@ -390,23 +391,26 @@ class MainActivity : AppCompatActivity(),
     private fun showSkinPicker() {
         val skins = arrayOf(
             getString(R.string.skin_ps),
+            getString(R.string.skin_xbox),
             getString(R.string.skin_snes),
             getString(R.string.skin_nes),
             getString(R.string.skin_gameboy)
         )
         val current = when (controllerView.skin) {
             ControllerView.Skin.PS -> 0
-            ControllerView.Skin.SNES -> 1
-            ControllerView.Skin.NES -> 2
-            ControllerView.Skin.GAMEBOY -> 3
+            ControllerView.Skin.XBOX -> 1
+            ControllerView.Skin.SNES -> 2
+            ControllerView.Skin.NES -> 3
+            ControllerView.Skin.GAMEBOY -> 4
         }
         AlertDialog.Builder(this)
             .setTitle(R.string.action_skin)
             .setSingleChoiceItems(skins, current) { dialog, which ->
                 val (skin, key) = when (which) {
-                    1 -> ControllerView.Skin.SNES to "SNES"
-                    2 -> ControllerView.Skin.NES to "NES"
-                    3 -> ControllerView.Skin.GAMEBOY to "GAMEBOY"
+                    1 -> ControllerView.Skin.XBOX to "XBOX"
+                    2 -> ControllerView.Skin.SNES to "SNES"
+                    3 -> ControllerView.Skin.NES to "NES"
+                    4 -> ControllerView.Skin.GAMEBOY to "GAMEBOY"
                     else -> ControllerView.Skin.PS to "PS"
                 }
                 controllerView.skin = skin

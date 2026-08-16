@@ -11,6 +11,7 @@ import android.bluetooth.BluetoothProfile
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
+import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
 /**
@@ -46,7 +47,14 @@ class HidGamepadManager(private val context: Context, private val listener: List
     }
 
     private val mainHandler = Handler(Looper.getMainLooper())
-    private val executor = Executors.newSingleThreadExecutor()
+    private var executor: ExecutorService = Executors.newSingleThreadExecutor()
+    private var reRegisterAttempts = 0
+
+    /** A shut-down executor cannot accept callbacks, so replace it if needed. */
+    private fun liveExecutor(): ExecutorService {
+        if (executor.isShutdown) executor = Executors.newSingleThreadExecutor()
+        return executor
+    }
 
     private var adapter: BluetoothAdapter? = null
     private var hidDevice: BluetoothHidDevice? = null
@@ -61,6 +69,15 @@ class HidGamepadManager(private val context: Context, private val listener: List
     val currentDevice: BluetoothDevice? get() = connectedDevice
 
     fun start() {
+        // A registration can be dropped while the app is still running — the
+        // profile is exclusive, so anything else claiming the HID Device role
+        // knocks us out. Recover instead of sitting there unregistered.
+        val live = hidDevice
+        if (started && live != null && !registered) {
+            reRegisterAttempts = 0
+            registerSdpApp(live)
+            return
+        }
         if (started) return
         val manager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
         adapter = manager.adapter
@@ -163,8 +180,21 @@ class HidGamepadManager(private val context: Context, private val listener: List
         override fun onServiceConnected(profile: Int, proxy: BluetoothProfile) {
             if (profile != BluetoothProfile.HID_DEVICE) return
             hidDevice = proxy as BluetoothHidDevice
-            post { listener.onHidStatus(HidStatus.REGISTERING, null) }
-            val sdp = BluetoothHidDeviceAppSdpSettings(
+            registerSdpApp(proxy)
+        }
+
+        override fun onServiceDisconnected(profile: Int) {
+            if (profile != BluetoothProfile.HID_DEVICE) return
+            hidDevice = null
+            registered = false
+            connectedDevice = null
+            post { listener.onHidDisconnected() }
+        }
+    }
+
+    private fun registerSdpApp(proxy: BluetoothHidDevice) {
+        post { listener.onHidStatus(HidStatus.REGISTERING, null) }
+        val sdp = BluetoothHidDeviceAppSdpSettings(
                 "PocketPad Controller",
                 "Wireless Controller",
                 "PocketPad",
@@ -177,26 +207,30 @@ class HidGamepadManager(private val context: Context, private val listener: List
                 BluetoothHidDeviceAppQosSettings.SERVICE_BEST_EFFORT,
                 800, 9, 0, 11250, BluetoothHidDeviceAppQosSettings.MAX
             )
-            try {
-                proxy.registerApp(sdp, null, qos, executor, hidCallback)
-            } catch (_: SecurityException) {
-                post { listener.onHidStatus(HidStatus.PERMISSION_MISSING, null) }
-            }
+        try {
+            proxy.registerApp(sdp, null, qos, liveExecutor(), hidCallback)
+        } catch (_: SecurityException) {
+            post { listener.onHidStatus(HidStatus.PERMISSION_MISSING, null) }
+        } catch (_: IllegalArgumentException) {
+            // Already registered under this SDP record; nothing to do.
         }
+    }
 
-        override fun onServiceDisconnected(profile: Int) {
-            if (profile != BluetoothProfile.HID_DEVICE) return
-            hidDevice = null
-            registered = false
-            connectedDevice = null
-            post { listener.onHidDisconnected() }
-        }
+    /** Re-register a dropped gamepad, backing off so it cannot spin. */
+    private fun scheduleReRegister() {
+        if (reRegisterAttempts >= MAX_REREGISTER_ATTEMPTS) return
+        reRegisterAttempts++
+        mainHandler.postDelayed({
+            val proxy = hidDevice
+            if (proxy != null && !registered) registerSdpApp(proxy)
+        }, 1000L * reRegisterAttempts)
     }
 
     private val hidCallback = object : BluetoothHidDevice.Callback() {
         override fun onAppStatusChanged(pluggedDevice: BluetoothDevice?, isRegistered: Boolean) {
             registered = isRegistered
             if (isRegistered) {
+                reRegisterAttempts = 0
                 post { listener.onHidStatus(HidStatus.READY, null) }
                 val pending = pendingConnect
                 pendingConnect = null
@@ -207,6 +241,7 @@ class HidGamepadManager(private val context: Context, private val listener: List
                 }
             } else {
                 post { listener.onHidStatus(HidStatus.UNREGISTERED, null) }
+                scheduleReRegister()
             }
         }
 
@@ -264,5 +299,6 @@ class HidGamepadManager(private val context: Context, private val listener: List
          * gamepad subclass is skipped by some firmware.
          */
         const val SUBCLASS: Byte = BluetoothHidDevice.SUBCLASS1_COMBO
+        const val MAX_REREGISTER_ATTEMPTS = 4
     }
 }
