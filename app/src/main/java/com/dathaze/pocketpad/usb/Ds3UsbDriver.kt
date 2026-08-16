@@ -214,6 +214,7 @@ class Ds3UsbDriver(private val context: Context, private val listener: Listener)
      *          triangle 0x10, circle 0x20, cross 0x40, square 0x80
      *  byte 4: PS button 0x01
      *  bytes 6..9: left X, left Y, right X, right Y (0..255)
+     *  bytes 18-19: analog pressure for L2 and R2 (0..255)
      */
     private fun parseReport(data: ByteArray, length: Int, out: GamepadState): Boolean {
         if (length < 10 || data[0] != 0x01.toByte()) return false
@@ -246,6 +247,16 @@ class Ds3UsbDriver(private val context: Context, private val listener: Listener)
         out.ly = data[7].toInt() and 0xFF
         out.rx = data[8].toInt() and 0xFF
         out.ry = data[9].toInt() and 0xFF
+
+        // The DS3 sends real pressure for L2/R2 at bytes 18-19; pass it
+        // through so the triggers are analog rather than on/off.
+        if (length >= 20) {
+            out.lt = data[18].toInt() and 0xFF
+            out.rt = data[19].toInt() and 0xFF
+        } else {
+            out.lt = if (b2 and 0x01 != 0) 255 else 0
+            out.rt = if (b2 and 0x02 != 0) 255 else 0
+        }
         return true
     }
 

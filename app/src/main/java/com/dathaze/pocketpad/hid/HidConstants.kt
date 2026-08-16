@@ -5,8 +5,9 @@ package com.dathaze.pocketpad.hid
  *  - 16 buttons (1 bit each)
  *  - 1 hat switch (d-pad, 4 bits + 4 bits padding)
  *  - 4 analog axes: X, Y (left stick) and Z, Rz (right stick), 0..255
+ *  - 2 analog triggers: Brake (L2/LT) and Accelerator (R2/RT), 0..255
  *
- * Total input report: 7 bytes (+ report id on the wire).
+ * Total input report: 9 bytes (+ report id on the wire).
  * This is a plain, spec-standard descriptor so Tizen TVs (and anything else
  * that accepts Bluetooth HID gamepads) can parse it without a driver.
  */
@@ -25,20 +26,23 @@ object HidConstants {
     const val KEY_DOWN: Byte = 0x51
     const val KEY_UP: Byte = 0x52
 
-    // Bit indices into the 16-bit button field (PS-style layout).
-    const val BTN_CROSS = 0
-    const val BTN_CIRCLE = 1
-    const val BTN_SQUARE = 2
-    const val BTN_TRIANGLE = 3
-    const val BTN_L1 = 4
-    const val BTN_R1 = 5
-    const val BTN_L2 = 6
-    const val BTN_R2 = 7
-    const val BTN_SHARE = 8
-    const val BTN_OPTIONS = 9
-    const val BTN_PS = 10
-    const val BTN_L3 = 11
-    const val BTN_R3 = 12
+    // Bit indices into the 16-bit button field. The order is the standard
+    // gamepad numbering every host expects — A/B/X/Y, bumpers, triggers,
+    // View, Menu, stick clicks, then Guide. Getting this order wrong makes a
+    // host read the wrong control entirely.
+    const val BTN_CROSS = 0      // button 1  — A / Cross
+    const val BTN_CIRCLE = 1     // button 2  — B / Circle
+    const val BTN_SQUARE = 2     // button 3  — X / Square
+    const val BTN_TRIANGLE = 3   // button 4  — Y / Triangle
+    const val BTN_L1 = 4         // button 5  — LB / L1
+    const val BTN_R1 = 5         // button 6  — RB / R1
+    const val BTN_L2 = 6         // button 7  — LT / L2
+    const val BTN_R2 = 7         // button 8  — RT / R2
+    const val BTN_SHARE = 8      // button 9  — View / Back / Select
+    const val BTN_OPTIONS = 9    // button 10 — Menu / Start
+    const val BTN_L3 = 10        // button 11 — left stick click
+    const val BTN_R3 = 11        // button 12 — right stick click
+    const val BTN_PS = 12        // button 13 — Guide / PS / Xbox
 
     // Hat switch values (0 = up, clockwise), 8 = released/neutral.
     const val HAT_NEUTRAL = 8
@@ -81,6 +85,16 @@ object HidConstants {
         0x26.toByte(), 0xFF.toByte(), 0x00.toByte(),  //   Logical Maximum (255)
         0x75.toByte(), 0x08.toByte(),                 //   Report Size (8)
         0x95.toByte(), 0x04.toByte(),                 //   Report Count (4)
+        0x81.toByte(), 0x02.toByte(),                 //   Input (Data, Variable, Absolute)
+        // Analog triggers. A digital button is not enough for anything that
+        // reads a throttle — driving games take gas and brake as axes.
+        0x05.toByte(), 0x02.toByte(),                 //   Usage Page (Simulation Controls)
+        0x09.toByte(), 0xC5.toByte(),                 //   Usage (Brake)
+        0x09.toByte(), 0xC4.toByte(),                 //   Usage (Accelerator)
+        0x15.toByte(), 0x00.toByte(),                 //   Logical Minimum (0)
+        0x26.toByte(), 0xFF.toByte(), 0x00.toByte(),  //   Logical Maximum (255)
+        0x75.toByte(), 0x08.toByte(),                 //   Report Size (8)
+        0x95.toByte(), 0x02.toByte(),                 //   Report Count (2)
         0x81.toByte(), 0x02.toByte(),                 //   Input (Data, Variable, Absolute)
         0xC0.toByte(),                                // End Collection
 

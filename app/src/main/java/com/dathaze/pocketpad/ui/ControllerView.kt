@@ -214,6 +214,7 @@ class ControllerView @JvmOverloads constructor(
 
         override fun onDown(x: Float, y: Float) {
             touchState.setButton(buttonIndex, true)
+            setTrigger(255)
             haptics.press()
             if (isHome) postDelayed(longPressRunnable, 700)
             notifyChanged()
@@ -222,7 +223,17 @@ class ControllerView @JvmOverloads constructor(
         override fun onUp() {
             if (isHome) removeCallbacks(longPressRunnable)
             touchState.setButton(buttonIndex, false)
+            setTrigger(0)
             notifyChanged()
+        }
+
+        /** L2/R2 are triggers, so they drive the analog axis as well as the
+         *  button bit — games that read a throttle need the axis. */
+        private fun setTrigger(value: Int) {
+            when (buttonIndex) {
+                HidConstants.BTN_L2 -> touchState.lt = value
+                HidConstants.BTN_R2 -> touchState.rt = value
+            }
         }
 
         override fun draw(canvas: Canvas) {

@@ -582,6 +582,12 @@ class MainActivity : AppCompatActivity(),
         }
         if (buttonIndex >= 0) {
             externalState.setButton(buttonIndex, pressed)
+            // Controllers that report triggers as plain keys still need the
+            // axis moved, or throttle input never reaches the host.
+            when (buttonIndex) {
+                HidConstants.BTN_L2 -> externalState.lt = if (pressed) 255 else 0
+                HidConstants.BTN_R2 -> externalState.rt = if (pressed) 255 else 0
+            }
             sendMerged()
             return true
         }
@@ -626,8 +632,12 @@ class MainActivity : AppCompatActivity(),
                 event.getAxisValue(MotionEvent.AXIS_RTRIGGER),
                 event.getAxisValue(MotionEvent.AXIS_GAS)
             )
-            externalState.setButton(HidConstants.BTN_L2, lt > 0.5f)
-            externalState.setButton(HidConstants.BTN_R2, rt > 0.5f)
+            // Forward the real analog value, not just a pressed/not-pressed
+            // bit — a throttle read as on/off is unusable in driving games.
+            externalState.lt = triggerToByte(lt)
+            externalState.rt = triggerToByte(rt)
+            externalState.setButton(HidConstants.BTN_L2, lt > 0.12f)
+            externalState.setButton(HidConstants.BTN_R2, rt > 0.12f)
 
             sendMerged()
             return true
@@ -651,6 +661,10 @@ class MainActivity : AppCompatActivity(),
 
     private fun axisToByte(value: Float): Int =
         ((value.coerceIn(-1f, 1f) + 1f) / 2f * 255f).roundToInt().coerceIn(0, 255)
+
+    /** Triggers report 0..1, unlike sticks which are -1..1. */
+    private fun triggerToByte(value: Float): Int =
+        (value.coerceIn(0f, 1f) * 255f).roundToInt().coerceIn(0, 255)
 
     // ------------------------------------------------------------- USB (DS3)
 
