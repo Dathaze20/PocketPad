@@ -969,22 +969,23 @@ class ControllerView @JvmOverloads constructor(
     // control sits inside another's halo — spacing modeled on a real pad.
 
     private fun layoutPsPortrait(w: Float, h: Float) {
-        val small = w * 0.072f
-        val face = w * 0.078f
+        val unit = min(w, h * 0.46f)
+        val small = unit * 0.072f
+        val face = unit * 0.078f
         place(btnL1, w * 0.10f, h * 0.10f, small)
         place(btnL2, w * 0.26f, h * 0.10f, small)
         place(btnR2, w * 0.74f, h * 0.10f, small)
         place(btnR1, w * 0.90f, h * 0.10f, small)
-        place(dpad, w * 0.26f, h * 0.28f, w * 0.19f)
+        place(dpad, w * 0.26f, h * 0.28f, unit * 0.19f)
         val fx = w * 0.74f
         val fy = h * 0.28f
-        val off = w * 0.138f
+        val off = unit * 0.138f
         place(faceTop, fx, fy - off, face)
         place(faceRight, fx + off, fy, face)
         place(faceBottom, fx, fy + off, face)
         place(faceLeft, fx - off, fy, face)
-        place(leftStick, w * 0.28f, h * 0.56f, w * 0.155f)
-        place(rightStick, w * 0.72f, h * 0.56f, w * 0.155f)
+        place(leftStick, w * 0.28f, h * 0.56f, unit * 0.155f)
+        place(rightStick, w * 0.72f, h * 0.56f, unit * 0.155f)
         place(btnL3, w * 0.5f, h * 0.495f, small * 0.8f)
         place(btnR3, w * 0.5f, h * 0.625f, small * 0.8f)
         place(btnShare, w * 0.24f, h * 0.79f, small)
@@ -994,22 +995,25 @@ class ControllerView @JvmOverloads constructor(
     }
 
     private fun layoutPsLandscape(w: Float, h: Float) {
-        val small = h * 0.072f
-        val face = h * 0.092f
-        place(btnL2, w * 0.055f, h * 0.14f, small)
-        place(btnL1, w * 0.145f, h * 0.14f, small)
-        place(btnR1, w * 0.855f, h * 0.14f, small)
-        place(btnR2, w * 0.945f, h * 0.14f, small)
-        place(dpad, w * 0.135f, h * 0.52f, min(w, h) * 0.21f)
-        val fx = w * 0.865f
-        val fy = h * 0.52f
-        val off = min(w, h) * 0.168f
+        val unit = min(h, w * 0.46f)
+        val small = unit * 0.072f
+        val face = unit * 0.090f
+        // Shoulders sit outboard of the clusters below them rather than
+        // directly on top, so R1 does not stack over the top face button.
+        place(btnL2, w * 0.048f, h * 0.112f, small)
+        place(btnL1, w * 0.125f, h * 0.112f, small)
+        place(btnR1, w * 0.875f, h * 0.112f, small)
+        place(btnR2, w * 0.952f, h * 0.112f, small)
+        place(dpad, w * 0.155f, h * 0.55f, unit * 0.205f)
+        val fx = w * 0.845f
+        val fy = h * 0.55f
+        val off = unit * 0.165f
         place(faceTop, fx, fy - off, face)
         place(faceRight, fx + off, fy, face)
         place(faceBottom, fx, fy + off, face)
         place(faceLeft, fx - off, fy, face)
-        place(leftStick, w * 0.335f, h * 0.68f, h * 0.155f)
-        place(rightStick, w * 0.665f, h * 0.68f, h * 0.155f)
+        place(leftStick, w * 0.35f, h * 0.71f, unit * 0.150f)
+        place(rightStick, w * 0.65f, h * 0.71f, unit * 0.150f)
         place(btnL3, w * 0.445f, h * 0.94f, small * 0.78f)
         place(btnR3, w * 0.555f, h * 0.94f, small * 0.78f)
         place(btnShare, w * 0.38f, h * 0.22f, small)
@@ -1023,22 +1027,23 @@ class ControllerView @JvmOverloads constructor(
     // the d-pad drops below it, mirrored by the face cluster and right stick.
 
     private fun layoutXboxPortrait(w: Float, h: Float) {
-        val small = w * 0.072f
-        val face = w * 0.078f
-        place(btnL2, w * 0.10f, h * 0.09f, small)
-        place(btnL1, w * 0.26f, h * 0.09f, small)
-        place(btnR1, w * 0.74f, h * 0.09f, small)
-        place(btnR2, w * 0.90f, h * 0.09f, small)
-        place(leftStick, w * 0.26f, h * 0.26f, w * 0.15f)
+        val unit = min(w, h * 0.46f)
+        val small = unit * 0.072f
+        val face = unit * 0.078f
+        place(btnL2, w * 0.10f, h * 0.075f, small)
+        place(btnL1, w * 0.26f, h * 0.075f, small)
+        place(btnR1, w * 0.74f, h * 0.075f, small)
+        place(btnR2, w * 0.90f, h * 0.075f, small)
+        place(leftStick, w * 0.26f, h * 0.29f, unit * 0.15f)
         val fx = w * 0.74f
-        val fy = h * 0.26f
-        val off = w * 0.138f
+        val fy = h * 0.29f
+        val off = unit * 0.138f
         place(faceTop, fx, fy - off, face)
         place(faceRight, fx + off, fy, face)
         place(faceBottom, fx, fy + off, face)
         place(faceLeft, fx - off, fy, face)
-        place(dpad, w * 0.27f, h * 0.52f, w * 0.165f)
-        place(rightStick, w * 0.73f, h * 0.52f, w * 0.15f)
+        place(dpad, w * 0.27f, h * 0.52f, unit * 0.165f)
+        place(rightStick, w * 0.73f, h * 0.52f, unit * 0.15f)
         place(btnL3, w * 0.5f, h * 0.44f, small * 0.78f)
         place(btnR3, w * 0.5f, h * 0.60f, small * 0.78f)
         place(btnShare, w * 0.26f, h * 0.79f, small)
@@ -1048,22 +1053,23 @@ class ControllerView @JvmOverloads constructor(
     }
 
     private fun layoutXboxLandscape(w: Float, h: Float) {
-        val small = h * 0.072f
-        val face = h * 0.092f
-        place(btnL2, w * 0.055f, h * 0.14f, small)
-        place(btnL1, w * 0.145f, h * 0.14f, small)
-        place(btnR1, w * 0.855f, h * 0.14f, small)
-        place(btnR2, w * 0.945f, h * 0.14f, small)
-        place(leftStick, w * 0.135f, h * 0.46f, h * 0.165f)
-        val fx = w * 0.865f
-        val fy = h * 0.46f
-        val off = min(w, h) * 0.168f
+        val unit = min(h, w * 0.46f)
+        val small = unit * 0.072f
+        val face = unit * 0.090f
+        place(btnL2, w * 0.048f, h * 0.088f, small)
+        place(btnL1, w * 0.125f, h * 0.088f, small)
+        place(btnR1, w * 0.875f, h * 0.088f, small)
+        place(btnR2, w * 0.952f, h * 0.088f, small)
+        place(leftStick, w * 0.155f, h * 0.47f, unit * 0.155f)
+        val fx = w * 0.845f
+        val fy = h * 0.53f
+        val off = unit * 0.165f
         place(faceTop, fx, fy - off, face)
         place(faceRight, fx + off, fy, face)
         place(faceBottom, fx, fy + off, face)
         place(faceLeft, fx - off, fy, face)
-        place(dpad, w * 0.315f, h * 0.76f, min(w, h) * 0.165f)
-        place(rightStick, w * 0.685f, h * 0.76f, h * 0.155f)
+        place(dpad, w * 0.33f, h * 0.78f, unit * 0.16f)
+        place(rightStick, w * 0.67f, h * 0.78f, unit * 0.150f)
         place(btnL3, w * 0.445f, h * 0.94f, small * 0.78f)
         place(btnR3, w * 0.555f, h * 0.94f, small * 0.78f)
         place(btnShare, w * 0.38f, h * 0.22f, small)
@@ -1075,14 +1081,15 @@ class ControllerView @JvmOverloads constructor(
     // ---------------------------------------------------------- SNES layouts
 
     private fun layoutSnesPortrait(w: Float, h: Float) {
-        val small = w * 0.076f
-        val face = w * 0.082f
+        val unit = min(w, h * 0.46f)
+        val small = unit * 0.076f
+        val face = unit * 0.082f
         place(btnL1, w * 0.12f, h * 0.10f, small)
         place(btnR1, w * 0.88f, h * 0.10f, small)
-        place(dpad, w * 0.26f, h * 0.30f, w * 0.20f)
+        place(dpad, w * 0.26f, h * 0.30f, unit * 0.20f)
         val fx = w * 0.74f
         val fy = h * 0.30f
-        val off = w * 0.145f
+        val off = unit * 0.145f
         place(faceTop, fx, fy - off, face)
         place(faceRight, fx + off, fy, face)
         place(faceBottom, fx, fy + off, face)
@@ -1094,14 +1101,15 @@ class ControllerView @JvmOverloads constructor(
     }
 
     private fun layoutSnesLandscape(w: Float, h: Float) {
-        val small = h * 0.076f
-        val face = h * 0.095f
+        val unit = min(h, w * 0.46f)
+        val small = unit * 0.076f
+        val face = unit * 0.095f
         place(btnL1, w * 0.09f, h * 0.14f, small)
         place(btnR1, w * 0.91f, h * 0.14f, small)
-        place(dpad, w * 0.16f, h * 0.58f, min(w, h) * 0.22f)
+        place(dpad, w * 0.16f, h * 0.58f, unit * 0.22f)
         val fx = w * 0.84f
         val fy = h * 0.58f
-        val off = min(w, h) * 0.172f
+        val off = unit * 0.172f
         place(faceTop, fx, fy - off, face)
         place(faceRight, fx + off, fy, face)
         place(faceBottom, fx, fy + off, face)
@@ -1115,9 +1123,10 @@ class ControllerView @JvmOverloads constructor(
     // ------------------------------------------------- NES / Game Boy layouts
 
     private fun layoutRetroPortrait(w: Float, h: Float) {
-        val small = w * 0.08f
-        val face = w * 0.105f
-        place(dpad, w * 0.26f, h * 0.32f, w * 0.20f)
+        val unit = min(w, h * 0.46f)
+        val small = unit * 0.08f
+        val face = unit * 0.105f
+        place(dpad, w * 0.26f, h * 0.32f, unit * 0.20f)
         // A high on the right, B lower-left of it — Game Boy diagonal.
         place(faceRight, w * 0.82f, h * 0.27f, face)
         place(faceBottom, w * 0.62f, h * 0.38f, face)
@@ -1128,9 +1137,10 @@ class ControllerView @JvmOverloads constructor(
     }
 
     private fun layoutRetroLandscape(w: Float, h: Float) {
-        val small = h * 0.08f
-        val face = h * 0.115f
-        place(dpad, w * 0.16f, h * 0.55f, min(w, h) * 0.22f)
+        val unit = min(h, w * 0.46f)
+        val small = unit * 0.08f
+        val face = unit * 0.115f
+        place(dpad, w * 0.16f, h * 0.55f, unit * 0.22f)
         place(faceRight, w * 0.89f, h * 0.44f, face)
         place(faceBottom, w * 0.76f, h * 0.63f, face)
         place(btnShare, w * 0.38f, h * 0.20f, small)
