@@ -57,13 +57,25 @@ Tapping it asks GitHub whether the published release is newer than what you have
 
 Updating keeps everything: pairings, custom layouts, controller style, background picture, haptics and every other setting. The app's package name and signing key are unchanged, so Android installs the new APK over the old one without an uninstall.
 
-**What makes a build appear as an update.** Android decides what counts as an upgrade by `versionCode` alone, and PocketPad's `versionCode` is set by hand in [`app/build.gradle`](app/build.gradle) — it is not derived from the version name (2.3.0 is `versionCode` 17, not 20300). Every push to `main` republishes the `latest` release, but a build whose `versionCode` has not changed is correctly reported as "up to date", because Android would refuse to install it as an upgrade anyway. **Bump `versionCode` to ship a build to phones that already have PocketPad.** CI prints a warning when it publishes an unchanged one.
+**What makes a build appear as an update.** Android decides what counts as an upgrade by `versionCode` alone, and PocketPad's `versionCode` is set by hand in [`app/build.gradle`](app/build.gradle) — it is not derived from the version name (2.3.0 is `versionCode` 17, not 20300). **Bump `versionCode` to ship a build to phones that already have PocketPad.**
 
-So that the app has a number it can trust, each release now carries a small `version.json` beside `PocketPad.apk`, written by CI from the APK it just built (`aapt2 dump badging`) and holding its `versionCode`, `versionName` and SHA-256. The APK keeps its name, so the download link above is unchanged.
+A push to `main` whose `versionCode` is not higher than what is already published **leaves the release alone**: the existing APK, its download link and its `version.json` all stay exactly as they are, and CI prints a warning saying so. Only a higher `versionCode` replaces them, and it does so by uploading over the existing release rather than deleting and recreating it — the `latest` tag and the download URL above are never taken away, even briefly. CI then re-downloads that URL and refuses to finish unless it serves the build that was just made.
 
-**What is checked before anything is installed:** the download must come from GitHub over HTTPS (every redirect hop included), match the length and SHA-256 the release published, and read back as `com.dathaze.pocketpad` at the version that was offered and newer than the one running. Anything else is refused with a message, and the file is deleted.
+So that the app has a number it can trust, each release carries a small `version.json` beside `PocketPad.apk`, written by CI from the APK it just built (`aapt2 dump badging`) and holding its `versionCode`, `versionName` and SHA-256. The APK keeps its name, so the download link above is unchanged.
+
+**What is checked before anything is installed:**
+
+- the download starts from this repository's own release-download URL on `github.com` — not merely "somewhere on GitHub", which would include every other repository on the site — and every redirect hop stays on GitHub over HTTPS;
+- it matches the length **and the SHA-256** the release published. The checksum is required: a release that does not publish a usable one is refused rather than verified by length alone, because length is the one property of a substituted file that is free to match;
+- it reads back through Android as `com.dathaze.pocketpad`, at the version that was offered, and newer than the one running.
+
+Anything else is refused with a message, and the file is deleted.
+
+CI also refuses to publish an APK that is not signed with the repository's committed debug keystore, because an APK signed with a different key cannot install over an existing copy — Android would make you uninstall first, losing your layouts and pairings.
 
 Releases published before this existed carry no `version.json`; the app says so plainly rather than guessing, and the next build fixes it.
+
+**Your first 2.4.0 install has to be by hand.** The build before it has no Check for updates button, so nothing in it can fetch one. Download the APK once from the link above; updates after that come from inside the app. [docs/UPDATE_TESTING.md](docs/UPDATE_TESTING.md) has the full procedure.
 
 ---
 

@@ -77,6 +77,94 @@ class UpdateAssetsTest {
         assertTrue(UpdateAssets.isTrustedUrl("HTTPS://GitHub.com/a/b/releases/download/l/P.apk"))
     }
 
+    // -------------------------------------------- the official release only
+
+    private val repo = "Dathaze20/PocketPad"
+
+    @Test
+    fun thisProjectsOwnReleaseAssetIsAccepted() {
+        assertTrue(
+            UpdateAssets.isOfficialReleaseAsset(
+                "https://github.com/Dathaze20/PocketPad/releases/download/latest/PocketPad.apk",
+                repo
+            )
+        )
+        assertTrue(
+            "a future tag is still this project's release",
+            UpdateAssets.isOfficialReleaseAsset(
+                "https://github.com/Dathaze20/PocketPad/releases/download/v9.9.9/version.json",
+                repo
+            )
+        )
+        // GitHub treats owner and repo case-insensitively in URLs.
+        assertTrue(
+            UpdateAssets.isOfficialReleaseAsset(
+                "https://github.com/dathaze20/pocketpad/releases/download/latest/PocketPad.apk",
+                repo
+            )
+        )
+    }
+
+    /**
+     * The reason this exists. Every download link comes out of a JSON document fetched over
+     * the network, and "somewhere on github.com" is every repository on the site.
+     */
+    @Test
+    fun anotherRepositorysReleaseIsRefusedEvenThoughItIsOnGithub() {
+        for (url in listOf(
+            "https://github.com/someone/else/releases/download/latest/PocketPad.apk",
+            "https://github.com/Dathaze20/OtherApp/releases/download/latest/PocketPad.apk",
+            "https://github.com/Dathaze20/PocketPadEvil/releases/download/latest/PocketPad.apk",
+            "https://gist.github.com/Dathaze20/abc/raw/PocketPad.apk",
+            "https://raw.githubusercontent.com/Dathaze20/PocketPad/main/PocketPad.apk",
+        )) {
+            assertFalse(url, UpdateAssets.isOfficialReleaseAsset(url, repo))
+            }
+    }
+
+    @Test
+    fun somethingThatIsNotAReleaseDownloadIsRefused() {
+        for (url in listOf(
+            "https://github.com/Dathaze20/PocketPad",
+            "https://github.com/Dathaze20/PocketPad/releases/latest",
+            "https://github.com/Dathaze20/PocketPad/releases/download/",
+            "https://github.com/Dathaze20/PocketPad/archive/main.zip",
+            "https://github.com/Dathaze20/PocketPad/blob/main/app/debug.keystore",
+        )) {
+            assertFalse(url, UpdateAssets.isOfficialReleaseAsset(url, repo))
+        }
+    }
+
+    @Test
+    fun theStartOfTheChainIsStricterThanTheRedirectHops() {
+        // objects.githubusercontent.com is where an asset request lands, so it has to be
+        // allowed as a hop — but a download may never *start* there, because its path is a
+        // signed blob reference belonging to no repository.
+        val objectStore = "https://objects.githubusercontent.com/abc?token=1"
+        assertTrue("allowed as a hop", UpdateAssets.isTrustedUrl(objectStore))
+        assertFalse("not allowed as a start", UpdateAssets.isOfficialReleaseAsset(objectStore, repo))
+    }
+
+    @Test
+    fun anOfficialPathOverPlainHttpOrNonsenseIsStillRefused() {
+        assertFalse(
+            UpdateAssets.isOfficialReleaseAsset(
+                "http://github.com/Dathaze20/PocketPad/releases/download/latest/PocketPad.apk",
+                repo
+            )
+        )
+        assertFalse(UpdateAssets.isOfficialReleaseAsset(null, repo))
+        assertFalse(UpdateAssets.isOfficialReleaseAsset("", repo))
+        assertFalse(UpdateAssets.isOfficialReleaseAsset("not a url", repo))
+        // Userinfo cannot be used to make another host read as github.com.
+        assertFalse(
+            UpdateAssets.isOfficialReleaseAsset(
+                "https://github.com@evil.com/Dathaze20/PocketPad/releases/download/l/P.apk",
+                repo
+            )
+        )
+    }
+
     // ---------------------------------------------------------------- assets
 
     @Test

@@ -31,17 +31,50 @@ object UpdateAssets {
     /**
      * True when [url] is an https URL on a host updates may legitimately come from.
      *
-     * Checked on the first request and again on every redirect hop. Plain http is refused
-     * outright: an APK fetched over http is an APK chosen by whatever sits on the network
-     * between the phone and the server.
+     * This is the **redirect-hop** rule, not the rule for where a download may start. GitHub
+     * answers an asset request with a redirect to its object store, under a signed path nobody
+     * can predict, so a hop can only be checked by host. Plain http is refused outright: an APK
+     * fetched over http is an APK chosen by whatever sits on the network in between.
+     *
+     * Where a download may *start* is a stricter question — see [isOfficialReleaseAsset].
      */
     fun isTrustedUrl(url: String?): Boolean {
-        val raw = url?.trim().orEmpty()
-        if (raw.isEmpty()) return false
-        val parsed = runCatching { java.net.URI(raw) }.getOrNull() ?: return false
-        if (!"https".equals(parsed.scheme, ignoreCase = true)) return false
+        val parsed = httpsUri(url) ?: return false
         val host = parsed.host?.lowercase(Locale.US) ?: return false
         return ALLOWED_HOSTS.any { host == it || host.endsWith(".$it") }
+    }
+
+    /**
+     * True when [url] is an asset of a release of [repo] itself.
+     *
+     * [isTrustedUrl] alone is not enough for the URL the update *starts* from. Every download
+     * link in a release comes out of a JSON document fetched over the network, and "somewhere
+     * on github.com" includes every other repository on the site — a gist, a fork, anybody's
+     * release. Pinning the start of the chain to this project's own release-download path is
+     * what makes the APK that gets installed this project's APK.
+     *
+     * Only the first request can be pinned this way: after that GitHub redirects to its object
+     * store, where the path is a signed blob reference belonging to no repository, and the hops
+     * fall back to [isTrustedUrl].
+     */
+    fun isOfficialReleaseAsset(url: String?, repo: String): Boolean {
+        val parsed = httpsUri(url) ?: return false
+        // Exactly github.com. A subdomain is fine for a redirect target but is never where a
+        // release asset of this repository lives.
+        if (!"github.com".equals(parsed.host, ignoreCase = true)) return false
+        val path = parsed.path?.lowercase(Locale.US) ?: return false
+        // GitHub treats owner and repo case-insensitively in URLs, so the comparison is too.
+        val wanted = "/${repo.trim('/').lowercase(Locale.US)}/releases/download/"
+        return path.startsWith(wanted) && path.length > wanted.length
+    }
+
+    /** [url] as an https URI, or null if it is blank, malformed, or some other scheme. */
+    private fun httpsUri(url: String?): java.net.URI? {
+        val raw = url?.trim().orEmpty()
+        if (raw.isEmpty()) return null
+        val parsed = runCatching { java.net.URI(raw) }.getOrNull() ?: return null
+        if (!"https".equals(parsed.scheme, ignoreCase = true)) return null
+        return parsed
     }
 
     /**

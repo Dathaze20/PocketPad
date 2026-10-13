@@ -26,11 +26,17 @@ object DownloadCheck {
      * Length is checked first because it is what a cut-off download fails, and it gives a
      * message that says what actually happened. The checksum catches everything else: a
      * corrupted transfer, a cache serving a stale file, a different APK behind the same URL.
+     *
+     * [expectedSha256] is required, not optional. Length alone is not verification — it is the
+     * one property of a substituted file that is trivial to match — so a release that does not
+     * publish a checksum is refused upstream in [ReleaseMetadata.parseVersionManifest] rather
+     * than installed on the strength of its size. A blank or malformed value reaching here is
+     * a bug, and is treated as a failed check rather than as "no check".
      */
     fun verifyBytes(
         expectedBytes: Long,
         actualBytes: Long,
-        expectedSha256: String?,
+        expectedSha256: String,
         actualSha256: String,
     ): DownloadVerdict {
         if (actualBytes <= 0L) {
@@ -42,8 +48,14 @@ object DownloadCheck {
                     "Check your connection and try again."
             )
         }
-        val expected = expectedSha256?.lowercase(Locale.US)
-        if (expected != null && expected != actualSha256.lowercase(Locale.US)) {
+        val expected = expectedSha256.trim().lowercase(Locale.US)
+        if (expected.length != SHA256_HEX_LENGTH) {
+            return DownloadVerdict.Rejected(
+                "The release did not publish a usable checksum, so the download could not be " +
+                    "verified. It was not installed."
+            )
+        }
+        if (expected != actualSha256.trim().lowercase(Locale.US)) {
             return DownloadVerdict.Rejected(
                 "The downloaded file does not match the release checksum. It was not installed."
             )
@@ -110,4 +122,5 @@ object DownloadCheck {
     }
 
     private const val HEX = "0123456789abcdef"
+    private const val SHA256_HEX_LENGTH = 64
 }

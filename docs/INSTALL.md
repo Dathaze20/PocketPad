@@ -43,6 +43,8 @@ They protect people from apps that sideload malware. PocketPad talks Bluetooth t
 
 From **2.4.0** onwards you do not need this page to update. In PocketPad, open the settings menu and choose **Check for updates**.
 
+> **2.4.0 itself has to be installed from this page.** The build before it has no Check for updates button, so it cannot fetch one. Download the APK from the link at the top once; every update after that can be done from inside the app.
+
 It tells you the version you have, asks GitHub whether a newer one is published, and says so either way. If there is one, you get its version number and size and a **Download and install** button — nothing is downloaded until you tap it, and nothing is installed until Android's own installer asks you to confirm.
 
 The first time, Android asks you to allow PocketPad to install apps. That is the same one-time switch described in section 3 above, and the app offers to open it for you.

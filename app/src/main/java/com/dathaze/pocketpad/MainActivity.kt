@@ -49,11 +49,10 @@ class MainActivity : AppCompatActivity(),
     private lateinit var ds3Driver: Ds3UsbDriver
 
     /**
-     * The in-app updater, built the first time it is asked for. It reaches the network only
-     * once the user picks "Check for updates", so an install that never opens that menu never
-     * makes a request.
+     * The in-app updater, built the first time the user picks "Check for updates". An install
+     * that never opens that menu never constructs it and never makes a request.
      */
-    private val updateFlow by lazy { UpdateFlow(this) }
+    private var updateFlow: UpdateFlow? = null
 
     /**
      * When on, the pad ALSO sends keyboard keys so it can drive TV menus.
@@ -142,6 +141,10 @@ class MainActivity : AppCompatActivity(),
         super.onResume()
         // If Bluetooth was off at launch, retry once the user comes back.
         if (::hidManager.isInitialized && hasBluetoothPermissions()) hidManager.start()
+        // Coming back from Android's "install unknown apps" screen: put the update that was
+        // waiting on that permission back in front of the user. Null unless they opened the
+        // updater, so this costs nothing for everyone else.
+        updateFlow?.onActivityResumed()
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
@@ -288,7 +291,8 @@ class MainActivity : AppCompatActivity(),
      * dialog sits over the controller and the pad keeps working underneath it.
      */
     private fun checkForUpdates() {
-        updateFlow.start()
+        val flow = updateFlow ?: UpdateFlow(this).also { updateFlow = it }
+        flow.start()
     }
 
     private fun startLayoutEdit() {

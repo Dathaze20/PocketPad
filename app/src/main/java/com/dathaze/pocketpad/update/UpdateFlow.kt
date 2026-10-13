@@ -37,6 +37,15 @@ class UpdateFlow(private val activity: Activity) {
     private var busy = false
 
     /**
+     * The update that was being installed when Android asked for permission.
+     *
+     * Kept so that coming back from the settings screen can put the offer straight back in
+     * front of the user. Without it, granting permission left the dialog stuck on "Android
+     * needs permission" with no way forward but closing it and checking all over again.
+     */
+    private var offered: AvailableUpdate? = null
+
+    /**
      * Opens the dialog, and starts a check unless one is already running.
      *
      * Reopening while a download is in flight shows that download's progress rather than
@@ -52,6 +61,9 @@ class UpdateFlow(private val activity: Activity) {
 
     private fun check() {
         busy = true
+        // A fresh check replaces whatever was offered before, so a stale one cannot be
+        // resurrected by a later return from the settings screen.
+        offered = null
         render(UpdateState.Checking)
         onBackgroundThread {
             val result = updater.check()
@@ -62,9 +74,27 @@ class UpdateFlow(private val activity: Activity) {
         }
     }
 
+    /**
+     * Called from the activity's `onResume`.
+     *
+     * The one thing it does is notice that the user has come back from Android's
+     * "install unknown apps" screen having granted permission, and put the offer back on
+     * screen so they can carry on with one tap. It deliberately does **not** resume the
+     * download itself: granting a permission is not the same as asking to install, and an
+     * update that started on its own because the user walked through a settings screen would
+     * be exactly the silent behaviour this updater is supposed to avoid.
+     */
+    fun onActivityResumed() {
+        if (state !is UpdateState.NeedsInstallPermission) return
+        val pending = offered ?: return
+        if (!updater.canInstallPackages()) return
+        render(UpdateState.Available(pending))
+    }
+
     private fun download() {
         val available = (state as? UpdateState.Available)?.update ?: return
         if (busy) return
+        offered = available
         busy = true
         render(UpdateState.Downloading(0))
         onBackgroundThread {

@@ -87,14 +87,16 @@ class AppUpdater(private val context: Context) {
                     "next build will publish one."
             )
 
-        if (!UpdateAssets.isTrustedUrl(manifestAsset.url)) {
-            return UpdateState.Failed("That release points somewhere PocketPad will not fetch from.")
+        if (!UpdateAssets.isOfficialReleaseAsset(manifestAsset.url, GITHUB_REPO)) {
+            return UpdateState.Failed(NOT_OUR_RELEASE)
         }
 
         val manifestBody = fetchText(manifestAsset.url)
             .getOrElse { return UpdateState.Failed(describe(it)) }
-        val published = ReleaseMetadata.parseVersionManifest(manifestBody)
-            ?: return UpdateState.Failed("The release's version information is unreadable.")
+        val published = when (val parsed = ReleaseMetadata.parseVersionManifest(manifestBody)) {
+            is ManifestResult.Ok -> parsed.published
+            is ManifestResult.Invalid -> return UpdateState.Failed(parsed.reason)
+        }
 
         if (!UpdateVersion.isNewer(published.versionCode, installedVersionCode)) {
             return UpdateState.UpToDate
@@ -107,8 +109,9 @@ class AppUpdater(private val context: Context) {
             )
         val apk = release.asset(apkName)
             ?: return UpdateState.Failed("That release has no installable APK attached.")
-        if (!UpdateAssets.isTrustedUrl(apk.url)) {
-            return UpdateState.Failed("That release points somewhere PocketPad will not fetch from.")
+        // Pinned to this repository's own release-download path, not merely to GitHub.
+        if (!UpdateAssets.isOfficialReleaseAsset(apk.url, GITHUB_REPO)) {
+            return UpdateState.Failed(NOT_OUR_RELEASE)
         }
 
         return UpdateState.Available(
@@ -136,8 +139,10 @@ class AppUpdater(private val context: Context) {
      * download was, which is why it is stopped here instead.
      */
     fun downloadAndInstall(update: AvailableUpdate, onProgress: (Int) -> Unit): UpdateState {
-        if (!UpdateAssets.isTrustedUrl(update.apkUrl)) {
-            return UpdateState.Failed("An update may only be fetched from GitHub over https.")
+        // Re-checked here and not only at offer time: this is the call that actually fetches,
+        // and it must not depend on an earlier check still holding.
+        if (!UpdateAssets.isOfficialReleaseAsset(update.apkUrl, GITHUB_REPO)) {
+            return UpdateState.Failed(NOT_OUR_RELEASE)
         }
         // Asked again here, not just before offering: the user may have revoked it, and the
         // installer would otherwise open onto a dead end.
@@ -323,5 +328,8 @@ class AppUpdater(private val context: Context) {
         private const val TAG = "AppUpdater"
         private const val MAX_REDIRECTS = 5
         private const val NOTES_LIMIT = 400
+
+        private const val NOT_OUR_RELEASE =
+            "That download does not come from PocketPad's own GitHub release, so it was refused."
     }
 }

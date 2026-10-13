@@ -2,6 +2,7 @@ package com.dathaze.pocketpad.update
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
 import org.junit.Assert.assertNull
 import org.junit.Test
 
@@ -13,6 +14,20 @@ import org.junit.Test
  * otherwise never be exercised until a user hit one.
  */
 class ReleaseMetadataTest {
+
+    /** The manifest's version, or a failure naming what came back instead. */
+    private fun ok(body: String?): PublishedVersion =
+        when (val r = ReleaseMetadata.parseVersionManifest(body)) {
+            is ManifestResult.Ok -> r.published
+            is ManifestResult.Invalid -> throw AssertionError("expected Ok, got: ${r.reason}")
+        }
+
+    /** The reason a manifest was refused, or a failure if it was accepted. */
+    private fun refused(body: String?): String =
+        when (val r = ReleaseMetadata.parseVersionManifest(body)) {
+            is ManifestResult.Invalid -> r.reason
+            is ManifestResult.Ok -> throw AssertionError("expected a refusal, got ${r.published}")
+        }
 
     private val realRelease = """
         {
@@ -113,9 +128,7 @@ class ReleaseMetadataTest {
 
     @Test
     fun theVersionManifestIsReadInFull() {
-        val published = ReleaseMetadata.parseVersionManifest(realManifest)
-        assertNotNull(published)
-        requireNotNull(published)
+        val published = ok(realManifest)
         assertEquals(18, published.versionCode)
         assertEquals("2.4.0", published.versionName)
         assertEquals("PocketPad.apk", published.apkName)
@@ -125,66 +138,73 @@ class ReleaseMetadataTest {
         )
     }
 
+    private val sha = "3b1f2c4d5e6a7b8c9d0e1f2a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e"
+
     @Test
     fun aManifestWithoutAUsableVersionCodeIsRefused() {
         // Reading a missing code as 0 would turn every check into "you are up to date" and
         // hide the real problem for good.
-        assertNull(
-            ReleaseMetadata.parseVersionManifest("""{"versionName":"2.4.0","apk":"P.apk"}""")
-        )
-        assertNull(
-            ReleaseMetadata.parseVersionManifest("""{"versionCode":0,"apk":"P.apk"}""")
-        )
-        assertNull(
-            ReleaseMetadata.parseVersionManifest("""{"versionCode":-3,"apk":"P.apk"}""")
-        )
-        assertNull(
-            ReleaseMetadata.parseVersionManifest("""{"versionCode":"later","apk":"P.apk"}""")
-        )
+        val reason = refused("""{"versionName":"2.4.0","apk":"P.apk","apkSha256":"$sha"}""")
+        assertTrue("says what is missing: $reason", reason.contains("which version"))
+
+        refused("""{"versionCode":0,"apk":"P.apk","apkSha256":"$sha"}""")
+        refused("""{"versionCode":-3,"apk":"P.apk","apkSha256":"$sha"}""")
+        refused("""{"versionCode":"later","apk":"P.apk","apkSha256":"$sha"}""")
     }
 
     @Test
     fun aManifestThatNamesNoApkIsRefused() {
-        assertNull(ReleaseMetadata.parseVersionManifest("""{"versionCode":18}"""))
-        assertNull(ReleaseMetadata.parseVersionManifest("""{"versionCode":18,"apk":""}"""))
-        assertNull(ReleaseMetadata.parseVersionManifest("""{"versionCode":18,"apk":"   "}"""))
+        val reason = refused("""{"versionCode":18,"apkSha256":"$sha"}""")
+        assertTrue("says what is missing: $reason", reason.contains("which file"))
+
+        refused("""{"versionCode":18,"apk":"","apkSha256":"$sha"}""")
+        refused("""{"versionCode":18,"apk":"   ","apkSha256":"$sha"}""")
     }
 
     @Test
     fun aManifestThatIsNotJsonIsRefused() {
-        assertNull(ReleaseMetadata.parseVersionManifest("Not Found"))
-        assertNull(ReleaseMetadata.parseVersionManifest(""))
-        assertNull(ReleaseMetadata.parseVersionManifest(null))
+        refused("Not Found")
+        refused("")
+        refused(null)
+        refused("[]")
     }
 
     @Test
     fun aMissingVersionNameFallsBackToTheCodeRatherThanBeingBlank() {
-        val published =
-            ReleaseMetadata.parseVersionManifest("""{"versionCode":18,"apk":"PocketPad.apk"}""")
-        assertNotNull(published)
-        assertEquals("18", published!!.versionName)
+        val published = ok("""{"versionCode":18,"apk":"PocketPad.apk","apkSha256":"$sha"}""")
+        assertEquals("18", published.versionName)
     }
 
     /**
-     * A checksum is optional, but a broken one must read as absent rather than as a value the
-     * download can never match — that would make every update impossible to install.
+     * The checksum fails closed.
+     *
+     * It used to be optional: a manifest without one was accepted and the download was then
+     * verified by its length alone. Length is the one property of a substituted file that is
+     * free to match, so that was not verification. A manifest that does not publish a usable
+     * SHA-256 is now refused outright, and no update is offered from it.
      */
     @Test
-    fun anUnusableChecksumIsTreatedAsNoChecksum() {
-        fun shaOf(json: String) = ReleaseMetadata.parseVersionManifest(json)?.apkSha256
-
+    fun aManifestWithoutAUsableChecksumIsRefusedRatherThanVerifiedByLength() {
         val base = """"versionCode":18,"apk":"PocketPad.apk""""
-        assertNull("absent", shaOf("{$base}"))
-        assertNull("blank", shaOf("""{$base,"apkSha256":""}"""))
-        assertNull("too short", shaOf("""{$base,"apkSha256":"abc123"}"""))
-        assertNull(
-            "not hex",
-            shaOf("""{$base,"apkSha256":"zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz"}""")
-        )
 
-        // Upper case is the same checksum, so it is accepted and normalised.
+        val reason = refused("{$base}")
+        assertTrue("names the checksum: $reason", reason.contains("checksum"))
+        assertTrue("says nothing was offered: $reason", reason.contains("Nothing was offered"))
+
+        refused("""{$base,"apkSha256":""}""")
+        refused("""{$base,"apkSha256":"   "}""")
+        refused("""{$base,"apkSha256":"abc123"}""")
+        refused("""{$base,"apkSha256":"${"a".repeat(63)}"}""")
+        refused("""{$base,"apkSha256":"${"a".repeat(65)}"}""")
+        refused("""{$base,"apkSha256":"${"z".repeat(64)}"}""")
+        refused("""{$base,"apkSha256":123}""")
+    }
+
+    @Test
+    fun anUpperCaseChecksumIsTheSameChecksum() {
+        val base = """"versionCode":18,"apk":"PocketPad.apk""""
         val upper = "A".repeat(64)
-        assertEquals("a".repeat(64), shaOf("""{$base,"apkSha256":"$upper"}"""))
+        assertEquals("a".repeat(64), ok("""{$base,"apkSha256":"$upper"}""").apkSha256)
     }
 
     /**

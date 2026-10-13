@@ -42,8 +42,8 @@ class DownloadCheckTest {
 
     @Test
     fun anEmptyDownloadIsRejected() {
-        assertTrue(DownloadCheck.verifyBytes(9000, 0, null, sha) is DownloadVerdict.Rejected)
-        assertTrue(DownloadCheck.verifyBytes(0, 0, null, sha) is DownloadVerdict.Rejected)
+        assertTrue(DownloadCheck.verifyBytes(9000, 0, sha, sha) is DownloadVerdict.Rejected)
+        assertTrue(DownloadCheck.verifyBytes(0, 0, sha, sha) is DownloadVerdict.Rejected)
     }
 
     @Test
@@ -70,18 +70,47 @@ class DownloadCheckTest {
         )
     }
 
+    /**
+     * The fail-closed rule. A release that publishes no usable checksum is refused upstream,
+     * and if one ever reached here it must be a failed check rather than a skipped one.
+     */
     @Test
-    fun aReleaseWithoutAChecksumIsStillVerifiedByLength() {
-        // Older releases published no checksum; they must still be installable, and a
-        // truncated one must still be caught.
-        assertSame(DownloadVerdict.Ok, DownloadCheck.verifyBytes(1000, 1000, null, sha))
+    fun anUnusableChecksumIsAFailedCheckNotASkippedOne() {
+        for (bad in listOf("", "   ", "abc123", "a".repeat(63), "a".repeat(65))) {
+            val verdict = DownloadCheck.verifyBytes(1000, 1000, bad, sha)
+            assertTrue(
+                "checksum ${bad.length} chars long must not pass",
+                verdict is DownloadVerdict.Rejected
+            )
+        }
+        // The case that would otherwise fail *open*: a malformed expected value that the
+        // computed digest happens to equal. Comparing the two is not enough on its own —
+        // the expected value has to be a real checksum before it is worth comparing.
         assertTrue(
-            DownloadCheck.verifyBytes(1000, 400, null, sha) is DownloadVerdict.Rejected
+            "an empty expected checksum must never match an empty computed one",
+            DownloadCheck.verifyBytes(1000, 1000, "", "") is DownloadVerdict.Rejected
+        )
+        assertTrue(
+            DownloadCheck.verifyBytes(1000, 1000, "abc", "abc") is DownloadVerdict.Rejected
+        )
+
+        // And the refusal says the checksum was unusable, not that it merely disagreed —
+        // they are different problems with different fixes.
+        val text = message(DownloadCheck.verifyBytes(1000, 1000, "", sha))
+        assertTrue("names the checksum: $text", text.contains("usable checksum"))
+        assertTrue("says nothing was installed: $text", text.contains("not installed"))
+    }
+
+    @Test
+    fun lengthAloneNeverSubstitutesForTheChecksum() {
+        // Right length, wrong bytes: the case length checking cannot see at all.
+        assertTrue(
+            DownloadCheck.verifyBytes(1000, 1000, sha, otherSha) is DownloadVerdict.Rejected
         )
     }
 
     @Test
-    fun anUnknownLengthFallsBackToTheChecksum() {
+    fun anUnknownLengthStillLeavesTheChecksumDoingTheWork() {
         // GitHub did not report a size, so length proves nothing — but the checksum still does.
         assertSame(DownloadVerdict.Ok, DownloadCheck.verifyBytes(0, 1234, sha, sha))
         assertTrue(

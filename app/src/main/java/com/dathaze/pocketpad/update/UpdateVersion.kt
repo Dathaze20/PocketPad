@@ -23,8 +23,11 @@ data class PublishedVersion(
     val versionName: String,
     /** Which asset in the release is the APK this manifest describes. */
     val apkName: String,
-    /** Lower-case hex SHA-256 of that APK, or null when the release did not publish one. */
-    val apkSha256: String?,
+    /**
+     * Lower-case hex SHA-256 of that APK. Required: a manifest without one is refused by
+     * [ReleaseMetadata.parseVersionManifest] rather than read with this left empty.
+     */
+    val apkSha256: String,
 )
 
 object UpdateVersion {
@@ -56,7 +59,8 @@ data class AvailableUpdate(
     val apkUrl: String,
     val apkName: String,
     val apkBytes: Long,
-    val apkSha256: String?,
+    /** Always present; see [PublishedVersion.apkSha256]. */
+    val apkSha256: String,
 ) {
     /** "14.4 MB", or empty when the release did not report a size. */
     val readableSize: String

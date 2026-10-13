@@ -79,10 +79,11 @@ class UpdateVersionTest {
             versionCode = 18,
             versionName = "2.4.0",
             notes = "",
-            apkUrl = "https://github.com/x/y/releases/download/latest/PocketPad.apk",
+            apkUrl =
+                "https://github.com/Dathaze20/PocketPad/releases/download/latest/PocketPad.apk",
             apkName = "PocketPad.apk",
             apkBytes = 14_451_221,
-            apkSha256 = null,
+            apkSha256 = "a".repeat(64),
         )
         assertEquals("13.8 MB", update.readableSize)
         assertEquals("", update.copy(apkBytes = 0).readableSize)
