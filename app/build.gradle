@@ -69,4 +69,9 @@ dependencies {
     implementation 'androidx.appcompat:appcompat:1.7.1'
     // Photo Picker contract for custom controller backgrounds
     implementation 'androidx.activity:activity-ktx:1.11.0'
+
+    // Local JVM regression tests. These cover the HID report model, the
+    // external-controller tracker and the per-style control mapping, none of
+    // which touch the Android framework. Run with: ./gradlew test
+    testImplementation 'junit:junit:4.13.2'
 }

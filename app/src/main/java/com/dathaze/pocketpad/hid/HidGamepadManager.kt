@@ -226,6 +226,14 @@ class HidGamepadManager(private val context: Context, private val listener: List
         }, 1000L * reRegisterAttempts)
     }
 
+    /**
+     * True for the only report type this descriptor declares. The report type
+     * constants are bytes, so they are compared as bytes; 0 means the host did
+     * not specify one.
+     */
+    private fun isInputReportType(type: Byte): Boolean =
+        type == ZERO_BYTE || type == BluetoothHidDevice.REPORT_TYPE_INPUT
+
     private val hidCallback = object : BluetoothHidDevice.Callback() {
         override fun onAppStatusChanged(pluggedDevice: BluetoothDevice?, isRegistered: Boolean) {
             registered = isRegistered
@@ -262,17 +270,50 @@ class HidGamepadManager(private val context: Context, private val listener: List
             }
         }
 
+        /**
+         * The host polled us. Answer with the collection it actually asked
+         * for — replying with gamepad bytes to a keyboard request makes the
+         * host parse the hat byte as a keycode and register a phantom key.
+         */
         override fun onGetReport(device: BluetoothDevice, type: Byte, id: Byte, bufferSize: Int) {
-            // Host polled us — reply with a neutral report so it never stalls.
+            val proxy = hidDevice ?: return
             try {
-                hidDevice?.replyReport(device, type, id, GamepadState().toReport())
+                // This descriptor declares Input reports only, so a request for
+                // an Output or Feature report is unsupported rather than
+                // something to answer with input data. Type 0 = unspecified.
+                if (!isInputReportType(type)) {
+                    proxy.reportError(device, BluetoothHidDevice.ERROR_RSP_UNSUPPORTED_REQ)
+                    return
+                }
+                val report = HidConstants.neutralReportFor(id.toInt() and 0xFF)
+                if (report == null) {
+                    proxy.reportError(device, BluetoothHidDevice.ERROR_RSP_INVALID_RPT_ID)
+                    return
+                }
+                // Never hand back more than the host allocated room for.
+                val payload =
+                    if (bufferSize in 1 until report.size) report.copyOf(bufferSize) else report
+                proxy.replyReport(device, type, id, payload)
             } catch (_: SecurityException) {
             }
         }
 
         override fun onSetReport(device: BluetoothDevice, type: Byte, id: Byte, data: ByteArray) {
+            val proxy = hidDevice ?: return
             try {
-                hidDevice?.reportError(device, BluetoothHidDevice.ERROR_RSP_SUCCESS)
+                // No Output or Feature report is declared, so there is nothing
+                // a host can legitimately set. Acknowledging an Input report
+                // keeps previously working hosts happy; anything else is
+                // reported as unsupported instead of being silently accepted.
+                val known = HidConstants.neutralReportFor(id.toInt() and 0xFF) != null
+                when {
+                    !isInputReportType(type) ->
+                        proxy.reportError(device, BluetoothHidDevice.ERROR_RSP_UNSUPPORTED_REQ)
+                    !known ->
+                        proxy.reportError(device, BluetoothHidDevice.ERROR_RSP_INVALID_RPT_ID)
+                    else ->
+                        proxy.reportError(device, BluetoothHidDevice.ERROR_RSP_SUCCESS)
+                }
             } catch (_: SecurityException) {
             }
         }
@@ -300,5 +341,6 @@ class HidGamepadManager(private val context: Context, private val listener: List
          */
         const val SUBCLASS: Byte = BluetoothHidDevice.SUBCLASS1_COMBO
         const val MAX_REREGISTER_ATTEMPTS = 4
+        const val ZERO_BYTE: Byte = 0
     }
 }
