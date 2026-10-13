@@ -35,4 +35,18 @@ If tapping the APK does nothing, Android needs permission for the app you're bro
 
 ## Why these warnings exist
 
-They protect people from apps that sideload malware. PocketPad has no internet access at all — it only talks Bluetooth to your TV and USB to a plugged-in controller — but Android can't tell that until the app is signed by a Play-registered developer. Publishing to the Play Store (see [PLAY_STORE_CHECKLIST.md](PLAY_STORE_CHECKLIST.md)) removes these screens for good.
+They protect people from apps that sideload malware. PocketPad talks Bluetooth to your TV and USB to a plugged-in controller; its only internet use is the update check you start yourself from the settings menu, described below. Android can't tell any of that until the app is signed by a Play-registered developer. Publishing to the Play Store (see [PLAY_STORE_CHECKLIST.md](PLAY_STORE_CHECKLIST.md)) removes these screens for good.
+
+---
+
+## Already have PocketPad? Update from inside the app
+
+From **2.4.0** onwards you do not need this page to update. In PocketPad, open the settings menu and choose **Check for updates**.
+
+It tells you the version you have, asks GitHub whether a newer one is published, and says so either way. If there is one, you get its version number and size and a **Download and install** button — nothing is downloaded until you tap it, and nothing is installed until Android's own installer asks you to confirm.
+
+The first time, Android asks you to allow PocketPad to install apps. That is the same one-time switch described in section 3 above, and the app offers to open it for you.
+
+**Your pairings, custom layouts, background picture, controller style and haptics are all kept.** An update installs over the existing app; there is no uninstall and nothing is reset.
+
+If the app says the release does not publish version information, that release was built before in-app updating existed — download the APK from the link at the top of this page once, and the next update will work from inside the app.

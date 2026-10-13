@@ -11,8 +11,13 @@ android {
         applicationId "com.dathaze.pocketpad"
         minSdk 28            // BluetoothHidDevice API requires Android 9 (Pie)
         targetSdk 36
-        versionCode 17
-        versionName "2.3.0"
+        // Android decides what counts as an upgrade by versionCode alone, and it is set here
+        // by hand — it is NOT derived from versionName (2.3.0 was 17, not 20300). The in-app
+        // updater compares this number against the one CI reads back out of the published
+        // APK, so bumping it is what makes a build visible to phones that already have
+        // PocketPad. See README → Updating.
+        versionCode 18
+        versionName "2.4.0"
     }
 
     // Release signing: set these four properties in ~/.gradle/gradle.properties
@@ -69,4 +74,10 @@ dependencies {
     implementation 'androidx.appcompat:appcompat:1.7.1'
     // Photo Picker contract for custom controller backgrounds
     implementation 'androidx.activity:activity-ktx:1.11.0'
+
+    testImplementation 'junit:junit:4.13.2'
+    // The real org.json, not the android.jar stub. Every method on the stub throws, so the
+    // release-metadata parsing could otherwise only be tested on a device — which is exactly
+    // the code that has to behave when GitHub sends back something malformed.
+    testImplementation 'org.json:json:20231013'
 }

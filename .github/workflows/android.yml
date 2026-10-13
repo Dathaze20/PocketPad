@@ -24,6 +24,19 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      # Tests run before the build, so a failure here is reached before anything is published.
+      - name: Run unit tests
+        run: ./gradlew --no-daemon :app:testDebugUnitTest
+
+      - name: Upload test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: PocketPad-unit-test-report
+          path: |
+            app/build/reports/tests/testDebugUnitTest
+            app/build/test-results/testDebugUnitTest
+
       - name: Build debug APK and release bundle
         run: ./gradlew --no-daemon assembleDebug bundleRelease
 
@@ -41,13 +54,59 @@ jobs:
 
       # Public, no-login download for phones:
       # https://github.com/Dathaze20/PocketPad/releases/latest
+      #
+      # The release also carries version.json, which is what the in-app updater reads. The tag
+      # is "latest", which is not a version at all, and PocketPad's versionCode is assigned by
+      # hand and does not follow from its version name — 2.3.0 is versionCode 17, not 20300 —
+      # so neither the tag nor the name can be turned into the number Android compares.
+      # version.json is therefore generated from the APK that was just built, by reading the
+      # number back out of it. It cannot drift from the artifact because it is derived from it.
+      # The APK keeps its name, so the README download link is unaffected.
       - name: Publish APK to the "latest" release
         if: github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          set -euo pipefail
           cp app/build/outputs/apk/debug/app-debug.apk PocketPad.apk
+
+          tools="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)"
+          badging="$("$tools/aapt2" dump badging PocketPad.apk)"
+          code="$(printf '%s' "$badging" | grep -oP "versionCode='\K[0-9]+" | head -1 || true)"
+          name="$(printf '%s' "$badging" | grep -oP "versionName='\K[^']+" | head -1 || true)"
+          sha="$(sha256sum PocketPad.apk | cut -d' ' -f1)"
+          if [ -z "$code" ] || [ -z "$name" ]; then
+            echo "::error::could not read versionCode/versionName out of the built APK"
+            exit 1
+          fi
+          echo "::notice::publishing PocketPad $name (versionCode $code)"
+
+          # An unchanged versionCode is published as before — it is still the newest build —
+          # but the in-app updater will correctly report "up to date", because Android only
+          # treats a higher versionCode as an upgrade. Said out loud so a build intended to
+          # reach phones is not silently invisible to them.
+          prev=""
+          if gh release download latest -p version.json -D prev 2>/dev/null; then
+            prev="$(grep -oP '"versionCode"\s*:\s*\K[0-9]+' prev/version.json || true)"
+          fi
+          if [ -n "$prev" ] && [ "$code" -le "$prev" ]; then
+            echo "::warning::versionCode is still $code (previously published: $prev), so " \
+                 "'Check for updates' will report up to date. Bump versionCode in " \
+                 "app/build.gradle to ship this build to installed phones."
+          fi
+
+          # Schema read by ReleaseMetadata.parseVersionManifest; see ReleaseMetadataTest.
+          cat > version.json <<JSON
+          {
+            "versionCode": $code,
+            "versionName": "$name",
+            "apk": "PocketPad.apk",
+            "apkSha256": "$sha"
+          }
+          JSON
+          cat version.json
+
           gh release delete latest --yes --cleanup-tag || true
-          gh release create latest PocketPad.apk \
-            --title "PocketPad — newest build" \
-            --notes "Auto-built from the newest commit. On your phone: tap PocketPad.apk below, then open the download to install."
+          gh release create latest PocketPad.apk version.json \
+            --title "PocketPad $name — newest build" \
+            --notes "PocketPad $name (versionCode $code). Auto-built from the newest commit. On your phone: tap PocketPad.apk below, then open the download to install. Already have PocketPad? Settings → Check for updates does this for you."

@@ -44,6 +44,17 @@ Everything needed to take this project from source code to a live Play Store lis
 - [ ] **Privacy policy URL** — required. A ready-to-publish policy is included at [`docs/PRIVACY_POLICY.md`](PRIVACY_POLICY.md): enable GitHub Pages (repo Settings → Pages → deploy from branch → `main`, `/docs` folder) and paste the resulting URL into the Play Console.
 - [ ] **Data safety form**: "No data collected", "No data shared". Bluetooth permission is used for core functionality (device pairing/input), not for location.
 - [ ] **Permissions declaration**: `BLUETOOTH_CONNECT` / `BLUETOOTH_ADVERTISE` are runtime permissions with obvious purpose — no special declaration form needed (they are not in the sensitive-permissions list like SMS/location).
+- [ ] **`REQUEST_INSTALL_PACKAGES` must be removed before a Play release.** The in-app updater uses it to hand a downloaded APK to Android's installer, which is exactly the "distributing apps outside Play" case Google's Device and Network Abuse policy restricts to app-store and file-manager apps. A sideloaded build needs it; a Play build must not ship it, because Play updates the app itself.
+
+  The smallest way to do that when the time comes is a manifest entry in a Play-only source set or build type:
+
+  ```xml
+  <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"
+      tools:node="remove" />
+  ```
+
+  …together with hiding the **Check for updates** row in that variant. Until PocketPad is actually submitted, the sideloaded build is the only one distributed, so this is a prerequisite of publishing rather than a change to make now.
+- [ ] **Data safety form** must also cover the updater's network use: no data is collected or transmitted, but the app does make an outbound request to GitHub when the user taps Check for updates. See [PRIVACY_POLICY.md](PRIVACY_POLICY.md).
 - [ ] **Content rating questionnaire**: utility app, no user content → typically rated *Everyone*.
 - [ ] **Target API level**: this project targets SDK 36, which satisfies Play's current target-API requirement.
 - [ ] **App access**: full access, no login required.
@@ -58,4 +69,4 @@ Everything needed to take this project from source code to a live Play Store lis
 
 - [ ] Start with **Internal testing** track (instant approval, up to 100 testers) → promote to **Closed/Open testing** → **Production**.
 - [ ] New personal developer accounts must run a closed test with ≥12 testers for 14 days before production access — plan for this.
-- [ ] After launch: watch *Android vitals* for crashes (the app has no network code, so expect a quiet dashboard).
+- [ ] After launch: watch *Android vitals* for crashes (the only network code is the update check, which a Play build does not ship, so expect a quiet dashboard).

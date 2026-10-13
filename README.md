@@ -4,7 +4,9 @@
 
 The phone registers itself with Android's native `BluetoothHidDevice` API as a Bluetooth HID peripheral, so a TV, tablet, another phone, a PC — anything that accepts a Bluetooth controller — pairs with it the same way it would pair with a store-bought gamepad.
 
-**Nothing has to be installed on the receiving device.** There is no companion app, no pairing server, and no proprietary network protocol. The app contains no networking code and requests no `INTERNET` permission: input travels over the Bluetooth HID link and, optionally, over USB from a controller plugged into the phone.
+**Nothing has to be installed on the receiving device.** There is no companion app, no pairing server, and no proprietary network protocol: input travels over the Bluetooth HID link and, optionally, over USB from a controller plugged into the phone.
+
+The app does hold the `INTERNET` permission, for one thing only — **Settings → Check for updates**, which asks GitHub whether a newer release exists and, if you say yes, downloads the APK. Nothing else in the app reaches the network, the check runs only when you tap it, and no button press, layout, background picture or setting is ever uploaded. See [Updating](#updating) and [docs/PRIVACY_POLICY.md](docs/PRIVACY_POLICY.md).
 
 That is the main thing separating PocketPad from most "phone as controller" projects, which stream input to a helper application or a desktop server over Wi-Fi. PocketPad speaks the standard the host already understands.
 
@@ -13,6 +15,7 @@ That is the main thing separating PocketPad from most "phone as controller" proj
 ## Contents
 
 - [Install](#install)
+- [Updating](#updating)
 - [Features](#features)
 - [Pairing](#pairing)
 - [Physical controller passthrough](#physical-controller-passthrough)
@@ -43,6 +46,24 @@ Because the APK is sideloaded, Android shows a Google Play Protect warning for a
 ### Option 2 — build it yourself
 
 See [Building](#building). Building from source produces the same app; it is the right path if you want to change the code or sign it yourself.
+
+---
+
+## Updating
+
+**Settings → Check for updates.** No GitHub page, no browser, no re-download by hand.
+
+Tapping it asks GitHub whether the published release is newer than what you have, and says so either way. If it is, you get the version number and the download size, and nothing happens until you tap **Download and install**. Android's own installer then asks you to confirm — PocketPad cannot install anything silently, and the first time you use it Android will ask you to allow installs from PocketPad, which is a one-time switch it offers to open for you.
+
+Updating keeps everything: pairings, custom layouts, controller style, background picture, haptics and every other setting. The app's package name and signing key are unchanged, so Android installs the new APK over the old one without an uninstall.
+
+**What makes a build appear as an update.** Android decides what counts as an upgrade by `versionCode` alone, and PocketPad's `versionCode` is set by hand in [`app/build.gradle`](app/build.gradle) — it is not derived from the version name (2.3.0 is `versionCode` 17, not 20300). Every push to `main` republishes the `latest` release, but a build whose `versionCode` has not changed is correctly reported as "up to date", because Android would refuse to install it as an upgrade anyway. **Bump `versionCode` to ship a build to phones that already have PocketPad.** CI prints a warning when it publishes an unchanged one.
+
+So that the app has a number it can trust, each release now carries a small `version.json` beside `PocketPad.apk`, written by CI from the APK it just built (`aapt2 dump badging`) and holding its `versionCode`, `versionName` and SHA-256. The APK keeps its name, so the download link above is unchanged.
+
+**What is checked before anything is installed:** the download must come from GitHub over HTTPS (every redirect hop included), match the length and SHA-256 the release published, and read back as `com.dathaze.pocketpad` at the version that was offered and newer than the one running. Anything else is refused with a message, and the file is deleted.
+
+Releases published before this existed carry no `version.json`; the app says so plainly rather than guessing, and the next build fixes it.
 
 ---
 
@@ -164,10 +185,22 @@ app/src/main/java/com/dathaze/pocketpad/
 │                              # lifecycle, re-registration recovery, report sending
 ├── usb/
 │   └── Ds3UsbDriver.kt        # USB-host driver for the DualShock 3
+├── update/
+│   ├── UpdateVersion.kt       # What a release is, and what counts as newer
+│   ├── UpdateAssets.kt        # Which URLs and which asset may be fetched
+│   ├── ReleaseMetadata.kt     # Reads GitHub's release JSON and version.json
+│   ├── DownloadCheck.kt       # Length, checksum and package-identity verdicts
+│   ├── AppUpdater.kt          # HTTPS fetch, download, hand-off to the installer
+│   └── UpdateFlow.kt          # The Check-for-updates dialog and its thread
 └── ui/
     ├── ControllerView.kt      # Canvas gamepad: 5 styles, layout editor, backgrounds
     └── Haptics.kt             # Vibration levels
 ```
+
+The `update` package is the only part of the app that touches the network, and it does so
+only from the Settings menu. Everything in it except `AppUpdater` and `UpdateFlow` is free of
+`android.*`, which is what lets the version comparison, the URL rules and the download checks
+be unit-tested directly rather than inferred from a download that happened to work.
 
 Input flows one way:
 
@@ -216,7 +249,7 @@ Publishing to Google Play is documented step by step in **[docs/PLAY_STORE_CHECK
 - **Bluetooth input latency depends on the host, the radio environment and distance.** No timing figures are claimed here because none have been measured for this project.
 - Hardware behaviour — pairing, per-game input handling, USB OTG — can only be confirmed on real devices. Continuous integration proves the project compiles, not that a given TV will accept it.
 
-**Privacy.** The app collects nothing and has no network access. See [docs/PRIVACY_POLICY.md](docs/PRIVACY_POLICY.md).
+**Privacy.** The app collects nothing. Its only network use is the update check you start yourself. See [docs/PRIVACY_POLICY.md](docs/PRIVACY_POLICY.md).
 
 ---
 
@@ -236,9 +269,10 @@ A short screen recording of pairing — long-press Home, ring pulses, host conne
 
 | Document | Contents |
 |---|---|
-| [docs/INSTALL.md](docs/INSTALL.md) | Sideloading: Play Protect, signature mismatches, unknown-sources permission |
+| [docs/INSTALL.md](docs/INSTALL.md) | Sideloading: Play Protect, signature mismatches, unknown-sources permission, updating from inside the app |
+| [docs/UPDATE_TESTING.md](docs/UPDATE_TESTING.md) | On-device procedure for verifying an update keeps your settings |
 | [docs/PLAY_STORE_CHECKLIST.md](docs/PLAY_STORE_CHECKLIST.md) | Signing, store listing, data-safety answers, rollout |
-| [docs/PRIVACY_POLICY.md](docs/PRIVACY_POLICY.md) | Ready-to-publish policy — no data collected |
+| [docs/PRIVACY_POLICY.md](docs/PRIVACY_POLICY.md) | Ready-to-publish policy — no data collected; what the update check does and does not send |
 
 ---
 
