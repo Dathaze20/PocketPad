@@ -2,6 +2,7 @@ package com.dathaze.pocketpad.ui
 
 import com.dathaze.pocketpad.hid.HidConstants
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -306,28 +307,74 @@ class ControllerStyleMappingTest {
         )
     }
 
+    /** The control a given style prints [label] on. */
+    private fun controlLabelled(style: String, label: String): String {
+        val matches = styleLabels[style]!!.filterValues { it == label }.keys
+        assertEquals("$style should print \"$label\" on exactly one control", 1, matches.size)
+        return matches.first()
+    }
+
+    /** The 1-based HID button a control sends. */
+    private fun hidButtonOf(control: String): Int =
+        buttonIndex[declarations[control]!!.second]!! + 1
+
     /**
-     * Nintendo's A and B sit in mirrored positions to Xbox's. Because the
-     * mapping is positional, the button labelled B on a Nintendo style sends
-     * the same HID button as Xbox A. That is intended, and it is recorded here
-     * so a future change cannot alter it silently.
+     * Nintendo's A and B sit in mirrored positions to Xbox's: Nintendo A is on
+     * the right where Xbox B is, and Nintendo B is on the bottom where Xbox A
+     * is. Because the mapping is positional, a Nintendo style's "A" therefore
+     * sends the button a host calls B, and its "B" sends the button a host
+     * calls A.
+     *
+     * That is intended, not a defect, and it is pinned here so it cannot
+     * change silently. Everything below is derived from the parsed source and
+     * compared against expectations stated independently of it.
      */
     @Test
     fun nintendoAAndBAreMirroredRelativeToXboxByDesign() {
-        val xbox = styleLabels["XBOX"]!!
-        val snes = styleLabels["SNES"]!!
-        assertEquals("A", xbox["faceBottom"])
-        assertEquals("B", snes["faceBottom"])
-        assertEquals("B", xbox["faceRight"])
-        assertEquals("A", snes["faceRight"])
+        val xboxA = controlLabelled("XBOX", "A")
+        val xboxB = controlLabelled("XBOX", "B")
+        assertEquals("faceBottom", xboxA)
+        assertEquals("faceRight", xboxB)
 
-        // Same position, same HID button, different printed label.
-        assertEquals(
-            declarations["faceBottom"]!!.second,
-            declarations["faceBottom"]!!.second
-        )
-        assertEquals(1, buttonIndex[declarations["faceBottom"]!!.second]!! + 1)
-        assertEquals(2, buttonIndex[declarations["faceRight"]!!.second]!! + 1)
+        for (style in listOf("SNES", "NES", "GAMEBOY")) {
+            val a = controlLabelled(style, "A")
+            val b = controlLabelled(style, "B")
+
+            assertNotEquals("$style A must not share Xbox A's position", xboxA, a)
+            assertEquals("$style A sits where Xbox B does", xboxB, a)
+            assertEquals("$style B sits where Xbox A does", xboxA, b)
+
+            // The consequence a user actually feels.
+            assertEquals("$style \"A\" transmits the button a host calls B", 2, hidButtonOf(a))
+            assertEquals("$style \"B\" transmits the button a host calls A", 1, hidButtonOf(b))
+        }
+
+        // PlayStation is not mirrored: its primary button is on the bottom.
+        assertEquals("faceBottom", controlLabelled("PS", "\u2715"))
+        assertEquals(1, hidButtonOf(controlLabelled("PS", "\u2715")))
+    }
+
+    /**
+     * Switching style must never change what a given position transmits —
+     * that is what lets a host keep one mapping across all five styles.
+     */
+    @Test
+    fun aGivenPositionSendsTheSameButtonInEveryStyle() {
+        val positions = listOf("faceBottom", "faceRight", "faceLeft", "faceTop")
+        positions.forEach { position ->
+            val sending = allStyles
+                .filter { styleActive[it]!!.contains(position) }
+                .map { hidButtonOf(position) }
+                .toSet()
+            assertEquals(
+                "$position must send one button across every style that shows it",
+                1, sending.size
+            )
+        }
+        assertEquals(1, hidButtonOf("faceBottom"))
+        assertEquals(2, hidButtonOf("faceRight"))
+        assertEquals(3, hidButtonOf("faceLeft"))
+        assertEquals(4, hidButtonOf("faceTop"))
     }
 
     // ---------------------------------------------------------- layouts

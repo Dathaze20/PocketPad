@@ -2,6 +2,9 @@ package com.dathaze.pocketpad.hid
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -212,5 +215,137 @@ class ExternalInputTrackerTest {
         t.source(padA).state.hat = HidConstants.HAT_NEUTRAL
         t.source(padB).state.hat = 6
         assertEquals(6, combined(t).hat)
+    }
+
+    // ----------------------------------------------------- late-event revival
+
+    @Test
+    fun anAttachedControllerIsReachableThroughTheGuardedLookup() {
+        val t = ExternalInputTracker()
+        val source = t.sourceIfAttached(padA)
+        assertNotNull("a controller that never disconnected must be usable", source)
+        assertFalse(t.isDetached(padA))
+        assertSame("the same source must come back on the next event", source, t.sourceIfAttached(padA))
+    }
+
+    /**
+     * The timing hazard behind the stuck-input defect. Input is delivered
+     * through a queue, so an event posted a moment before the pad was unplugged
+     * can still be handed to the activity after the disconnect was processed.
+     * Routing handlers through [ExternalInputTracker.sourceIfAttached] is what
+     * stops that event re-creating the pad with its button still down.
+     */
+    @Test
+    fun aLateEventCannotReviveARemovedController() {
+        val t = ExternalInputTracker()
+        t.source(padA).state.setButton(HidConstants.BTN_R1, true)
+        t.remove(padA)
+
+        assertTrue("the pad must be known to be gone", t.isDetached(padA))
+        assertNull("a late event must find nothing to write to", t.sourceIfAttached(padA))
+        assertEquals("no source may be re-created", 0, t.sourceCount)
+        assertFalse(t.has(padA))
+        assertEquals("nothing may still be transmitted as held", 0, combined(t).buttons)
+    }
+
+    @Test
+    fun aLateEventForOnePadDoesNotBlockAnotherThatIsStillConnected() {
+        val t = ExternalInputTracker()
+        t.source(padA).state.setButton(HidConstants.BTN_CROSS, true)
+        t.source(padB).state.setButton(HidConstants.BTN_CIRCLE, true)
+
+        t.remove(padA)
+
+        assertNull(t.sourceIfAttached(padA))
+        assertNotNull("the surviving pad must still accept input", t.sourceIfAttached(padB))
+        assertTrue("and must keep what it is holding", combined(t).isPressed(HidConstants.BTN_CIRCLE))
+    }
+
+    @Test
+    fun reconnectingTheSameControllerAcceptsItsInputAgain() {
+        val t = ExternalInputTracker()
+        t.source(padA).state.setButton(HidConstants.BTN_R1, true)
+        t.remove(padA)
+        assertNull(t.sourceIfAttached(padA))
+
+        t.markAttached(padA)
+
+        assertFalse(t.isDetached(padA))
+        val source = t.sourceIfAttached(padA)
+        assertNotNull("the pad came back and must work", source)
+        assertEquals(
+            "it must come back neutral, not holding what it held before",
+            0, source!!.state.buttons
+        )
+        source.state.setButton(HidConstants.BTN_CROSS, true)
+        assertTrue(combined(t).isPressed(HidConstants.BTN_CROSS))
+    }
+
+    @Test
+    fun theDs3CanDisconnectAndReconnectLikeAnyOtherController() {
+        val t = ExternalInputTracker()
+        val ds3 = ExternalInputTracker.SOURCE_DS3
+        t.source(ds3).state.apply {
+            setButton(HidConstants.BTN_SQUARE, true)
+            lt = 255
+        }
+
+        t.remove(ds3)
+        assertNull("a report still in flight must be dropped", t.sourceIfAttached(ds3))
+        assertEquals("the trigger must release", 0, combined(t).lt)
+
+        t.markAttached(ds3)
+        val source = t.sourceIfAttached(ds3)
+        assertNotNull(source)
+        assertEquals("the reconnected pad starts released", 0, source!!.state.lt)
+    }
+
+    @Test
+    fun markingAnAttachedControllerAgainChangesNothing() {
+        val t = ExternalInputTracker()
+        t.source(padA).state.setButton(HidConstants.BTN_CROSS, true)
+
+        t.markAttached(padA)
+
+        assertSame(
+            "a repeated attach must not discard the live source",
+            t.source(padA), t.sourceIfAttached(padA)
+        )
+        assertTrue(combined(t).isPressed(HidConstants.BTN_CROSS))
+    }
+
+    @Test
+    fun clearingForgetsBothLiveAndDisconnectedControllers() {
+        val t = ExternalInputTracker()
+        t.source(padA)
+        t.source(padB)
+        t.remove(padA)
+
+        t.clear()
+
+        assertEquals(0, t.sourceCount)
+        assertFalse("a cleared tracker must not still be refusing padA", t.isDetached(padA))
+        assertNotNull("a fresh tracker accepts every controller", t.sourceIfAttached(padA))
+    }
+
+    /**
+     * The guard is on the lookup that event handlers call, not on tracking
+     * itself. [ExternalInputTracker.source] is the single place a source is
+     * created and stays unguarded; nothing in the input path calls it, which
+     * is exactly why a late event cannot get past the guarded lookup.
+     */
+    @Test
+    fun theGuardIsOnTheLookupHandlersUseNotOnTrackingItself() {
+        val t = ExternalInputTracker()
+        t.remove(padA)
+
+        assertNotNull(t.source(padA))
+        assertNull(
+            "the guarded lookup keeps refusing it until it reattaches",
+            t.sourceIfAttached(padA)
+        )
+
+        t.markAttached(padA)
+        assertNotNull(t.sourceIfAttached(padA))
     }
 }

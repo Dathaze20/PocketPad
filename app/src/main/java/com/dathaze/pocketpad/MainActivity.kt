@@ -148,7 +148,11 @@ class MainActivity : AppCompatActivity(),
      * held, so drop that device's input and resend what is actually left.
      */
     private val inputDeviceListener = object : InputManager.InputDeviceListener {
-        override fun onInputDeviceAdded(deviceId: Int) = Unit
+        override fun onInputDeviceAdded(deviceId: Int) {
+            // The id is live again (possibly reused by different hardware),
+            // so stop ignoring input from it.
+            externalInputs.markAttached(deviceId)
+        }
         override fun onInputDeviceChanged(deviceId: Int) = Unit
         override fun onInputDeviceRemoved(deviceId: Int) {
             if (externalInputs.remove(deviceId)) refreshExternalState()
@@ -622,7 +626,8 @@ class MainActivity : AppCompatActivity(),
             else -> -1
         }
         if (buttonIndex >= 0) {
-            val source = externalInputs.source(deviceId)
+            // A disconnected controller's late events must not revive it.
+            val source = externalInputs.sourceIfAttached(deviceId) ?: return false
             source.state.setButton(buttonIndex, pressed)
             // Controllers that report triggers as plain keys still need the
             // axis moved, or throttle input never reaches the host.
@@ -640,7 +645,7 @@ class MainActivity : AppCompatActivity(),
         // Check before touching the tracker, so an unrelated key cannot create
         // an empty source that then looks like an attached controller.
         if (!isDpad) return false
-        val source = externalInputs.source(deviceId)
+        val source = externalInputs.sourceIfAttached(deviceId) ?: return false
         when (keyCode) {
             KeyEvent.KEYCODE_DPAD_UP -> source.keyUp = pressed
             KeyEvent.KEYCODE_DPAD_DOWN -> source.keyDown = pressed
@@ -656,7 +661,8 @@ class MainActivity : AppCompatActivity(),
         val isJoystick =
             event.source and InputDevice.SOURCE_JOYSTICK == InputDevice.SOURCE_JOYSTICK
         if (isJoystick && event.action == MotionEvent.ACTION_MOVE) {
-            val source = externalInputs.source(event.deviceId)
+            val source = externalInputs.sourceIfAttached(event.deviceId)
+                ?: return super.onGenericMotionEvent(event)
             source.state.lx = axisToByte(event.getAxisValue(MotionEvent.AXIS_X))
             source.state.ly = axisToByte(event.getAxisValue(MotionEvent.AXIS_Y))
             source.state.rx = axisToByte(event.getAxisValue(MotionEvent.AXIS_Z))
@@ -721,13 +727,20 @@ class MainActivity : AppCompatActivity(),
     }
 
     override fun onDs3State(state: GamepadState) {
-        externalInputs.source(ExternalInputTracker.SOURCE_DS3).state.copyFrom(state)
+        // Driver reports are posted to the main thread, so one sent just before
+        // the pad was unplugged can still land after the disconnect. Dropping it
+        // here is what stops that late report re-creating the DS3 mid-press.
+        val source = externalInputs.sourceIfAttached(ExternalInputTracker.SOURCE_DS3) ?: return
+        source.state.copyFrom(state)
         refreshExternalState()
     }
 
     override fun onDs3Status(connected: Boolean, message: String) {
         Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
-        if (!connected) {
+        if (connected) {
+            // Accept its input again after a previous disconnect.
+            externalInputs.markAttached(ExternalInputTracker.SOURCE_DS3)
+        } else {
             externalInputs.remove(ExternalInputTracker.SOURCE_DS3)
             refreshExternalState()
         }

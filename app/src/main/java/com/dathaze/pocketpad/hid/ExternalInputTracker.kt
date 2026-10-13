@@ -50,6 +50,15 @@ class ExternalInputTracker {
 
     private val sources = LinkedHashMap<Int, Source>()
 
+    /**
+     * Controllers that have gone away. Input events are delivered through a
+     * queue, so one posted just before a disconnect can still arrive after it.
+     * Without this, that late event would re-create the source through
+     * [source] and strand its button as held forever — nothing else will
+     * remove it, because the device is already gone.
+     */
+    private val detached = HashSet<Int>()
+
     val sourceCount: Int get() = sources.size
 
     fun sourceIds(): Set<Int> = sources.keys.toSet()
@@ -59,10 +68,31 @@ class ExternalInputTracker {
     /** The state belonging to [id], created on first use. */
     fun source(id: Int): Source = sources.getOrPut(id) { Source() }
 
-    /** Forget [id]'s input entirely; true if it was being tracked. */
-    fun remove(id: Int): Boolean = sources.remove(id) != null
+    /**
+     * The state for [id], or null if that controller has disconnected and has
+     * not come back. Input handlers use this so a late event cannot revive a
+     * controller that is gone.
+     */
+    fun sourceIfAttached(id: Int): Source? =
+        if (id in detached) null else source(id)
 
-    fun clear() = sources.clear()
+    /** A controller with this id is present again, so accept its input. */
+    fun markAttached(id: Int) {
+        detached.remove(id)
+    }
+
+    fun isDetached(id: Int): Boolean = id in detached
+
+    /** Forget [id]'s input entirely; true if it was being tracked. */
+    fun remove(id: Int): Boolean {
+        detached.add(id)
+        return sources.remove(id) != null
+    }
+
+    fun clear() {
+        sources.clear()
+        detached.clear()
+    }
 
     /**
      * Fold every tracked source into [out]: buttons are OR-ed, the hat takes

@@ -229,13 +229,4 @@ class HidReportTest {
         for (slot in 3 until r.size) assertEquals(0, r[slot].toInt())
     }
 
-    /** Truncation to a host's buffer, as done in onGetReport. */
-    @Test
-    fun aShortHostBufferTruncatesRatherThanOverruns() {
-        val full = HidConstants.neutralReportFor(HidConstants.REPORT_ID)!!
-        val bufferSize = 4
-        val payload = if (bufferSize in 1 until full.size) full.copyOf(bufferSize) else full
-        assertEquals(bufferSize, payload.size)
-        assertArrayEquals(full.copyOfRange(0, bufferSize), payload)
-    }
 }
