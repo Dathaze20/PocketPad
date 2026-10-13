@@ -10,14 +10,16 @@ Play Protect blocks apps it hasn't seen before. Your own app is new to it, so it
 
 **Fix:** on that dialog, tap **More details** → **Install anyway**.
 
-If the dialog only offers "Got it" with no "Install anyway":
+That option is present on current Android versions, and it is the whole fix. The "Install anyway" button is sometimes greyed out for a few seconds while Play Protect finishes scanning — wait a moment and it becomes tappable.
 
-1. Open the **Play Store** app
-2. Tap your **profile picture** (top right) → **Play Protect**
-3. Tap the **gear icon** (settings, top right)
-4. Turn **off** "Scan apps with Play Protect"
-5. Install PocketPad
-6. Turn Play Protect **back on** afterwards
+**Do not turn Play Protect off.** It is the scanner that protects every other app on the phone, and no install needs it disabled. If you cannot find "Install anyway":
+
+- Make sure you are tapping **More details** first — the option is hidden behind it, under the large "Got it" button.
+- Re-download the APK. A partial download can fail the scan.
+- Install from a different file app (Samsung **My Files** rather than the browser's download prompt, or the reverse).
+- Check the install permission in step 3 below; a missing permission can surface as a Play Protect-shaped dialog.
+
+If none of that works, build the app yourself from source and install your own build (see the main README) rather than weakening the phone's security.
 
 ## 2. "App not installed"
 

@@ -59,6 +59,25 @@ android {
         }
     }
 
+    // Make the unit-test run self-reporting in CI logs: per-test results plus
+    // a final count of executed / passed / failed / skipped.
+    testOptions {
+        unitTests.all {
+            testLogging {
+                events "passed", "skipped", "failed"
+                exceptionFormat "full"
+            }
+            afterSuite { desc, result ->
+                if (desc.parent == null) {
+                    println "\nUnit tests: ${result.testCount} executed, " +
+                            "${result.successfulTestCount} passed, " +
+                            "${result.failedTestCount} failed, " +
+                            "${result.skippedTestCount} skipped — ${result.resultType}"
+                }
+            }
+        }
+    }
+
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
@@ -75,6 +94,10 @@ dependencies {
     // Photo Picker contract for custom controller backgrounds
     implementation 'androidx.activity:activity-ktx:1.11.0'
 
+    // Local JVM regression tests. These cover the HID report model, the
+    // external-controller tracker, the per-style control mapping and the
+    // updater's version, URL and download rules — none of which touch the
+    // Android framework. Run with: ./gradlew test
     testImplementation 'junit:junit:4.13.2'
     // The real org.json, not the android.jar stub. Every method on the stub throws, so the
     // release-metadata parsing could otherwise only be tested on a device — which is exactly

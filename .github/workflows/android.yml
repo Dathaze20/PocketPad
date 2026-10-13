@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   build:
-    name: Build debug APK
+    name: Test and build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -24,7 +24,8 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      # Tests run before the build, so a failure here is reached before anything is published.
+      # Tests run first: a failure here fails the job and nothing downstream,
+      # including the release publication below, is reached.
       - name: Run unit tests
         run: ./gradlew --no-daemon :app:testDebugUnitTest
 
@@ -82,6 +83,9 @@ jobs:
 
       # Public, no-login download for phones:
       # https://github.com/Dathaze20/PocketPad/releases/latest
+      # Only a push to main publishes. A pull_request run never does, even
+      # from a branch named main in a fork: its ref is refs/pull/N/merge and
+      # its event is not "push".
       #
       # The release also carries version.json, which is what the in-app updater reads. The tag
       # is "latest", which is not a version at all, and PocketPad's versionCode is assigned by
