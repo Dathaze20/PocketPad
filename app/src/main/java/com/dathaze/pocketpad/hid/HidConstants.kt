@@ -131,4 +131,34 @@ object HidConstants {
     /** Build the 8-byte keyboard report for a single (or no) key. */
     fun keyboardReport(key: Byte): ByteArray =
         byteArrayOf(0, 0, key, 0, 0, 0, 0, 0)
+
+    /** Payload length of each input report, excluding the report id. */
+    const val GAMEPAD_REPORT_SIZE = 9
+    const val KEYBOARD_REPORT_SIZE = 8
+
+    /** A gamepad report with nothing pressed and both sticks centred. */
+    fun neutralGamepadReport(): ByteArray = GamepadState().toReport()
+
+    /** A keyboard report with no modifiers and no keys held. */
+    fun neutralKeyboardReport(): ByteArray = keyboardReport(KEY_NONE)
+
+    /**
+     * The neutral payload for [reportId], or null when this device declares no
+     * such report.
+     *
+     * Answering a Get_Report with the wrong collection's data is not harmless:
+     * a gamepad report handed back for the keyboard would be read as modifier,
+     * reserved and then keycodes, and the hat byte (8) is keyboard usage 0x08 —
+     * the host would see a phantom "e".
+     *
+     * Report id 0 means the host did not name a report. It is answered with the
+     * gamepad report: that is the collection this device exists to provide, and
+     * it is what every previous build replied with, so hosts that work today
+     * keep working.
+     */
+    fun neutralReportFor(reportId: Int): ByteArray? = when (reportId) {
+        REPORT_ID, 0 -> neutralGamepadReport()
+        REPORT_ID_KEYBOARD -> neutralKeyboardReport()
+        else -> null
+    }
 }

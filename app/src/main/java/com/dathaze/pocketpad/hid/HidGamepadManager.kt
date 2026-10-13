@@ -262,17 +262,45 @@ class HidGamepadManager(private val context: Context, private val listener: List
             }
         }
 
+        /**
+         * The host polled us. Answer with the collection it actually asked
+         * for — replying with gamepad bytes to a keyboard request makes the
+         * host parse the hat byte as a keycode and register a phantom key.
+         */
         override fun onGetReport(device: BluetoothDevice, type: Byte, id: Byte, bufferSize: Int) {
-            // Host polled us — reply with a neutral report so it never stalls.
+            val proxy = hidDevice ?: return
             try {
-                hidDevice?.replyReport(device, type, id, GamepadState().toReport())
+                val outcome = HidReportRequests.getReport(
+                    type, id, bufferSize, BluetoothHidDevice.REPORT_TYPE_INPUT
+                )
+                when (outcome) {
+                    is HidRequestOutcome.Reply ->
+                        proxy.replyReport(device, type, id, outcome.payload)
+                    HidRequestOutcome.UnsupportedType ->
+                        proxy.reportError(device, BluetoothHidDevice.ERROR_RSP_UNSUPPORTED_REQ)
+                    HidRequestOutcome.UnknownReportId ->
+                        proxy.reportError(device, BluetoothHidDevice.ERROR_RSP_INVALID_RPT_ID)
+                    HidRequestOutcome.Acknowledge ->
+                        proxy.reportError(device, BluetoothHidDevice.ERROR_RSP_SUCCESS)
+                }
             } catch (_: SecurityException) {
             }
         }
 
         override fun onSetReport(device: BluetoothDevice, type: Byte, id: Byte, data: ByteArray) {
+            val proxy = hidDevice ?: return
             try {
-                hidDevice?.reportError(device, BluetoothHidDevice.ERROR_RSP_SUCCESS)
+                val outcome = HidReportRequests.setReport(
+                    type, id, BluetoothHidDevice.REPORT_TYPE_INPUT
+                )
+                val response = when (outcome) {
+                    HidRequestOutcome.UnsupportedType ->
+                        BluetoothHidDevice.ERROR_RSP_UNSUPPORTED_REQ
+                    HidRequestOutcome.UnknownReportId ->
+                        BluetoothHidDevice.ERROR_RSP_INVALID_RPT_ID
+                    else -> BluetoothHidDevice.ERROR_RSP_SUCCESS
+                }
+                proxy.reportError(device, response)
             } catch (_: SecurityException) {
             }
         }

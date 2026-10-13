@@ -6,6 +6,7 @@ import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.hardware.input.InputManager
 import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbManager
 import android.os.Build
@@ -27,13 +28,13 @@ import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import com.dathaze.pocketpad.hid.ExternalInputTracker
 import com.dathaze.pocketpad.hid.GamepadState
 import com.dathaze.pocketpad.hid.HidConstants
 import com.dathaze.pocketpad.hid.HidGamepadManager
 import com.dathaze.pocketpad.ui.ControllerView
 import com.dathaze.pocketpad.ui.Haptics
 import com.dathaze.pocketpad.usb.Ds3UsbDriver
-import kotlin.math.abs
 import kotlin.math.roundToInt
 
 class MainActivity : AppCompatActivity(),
@@ -54,15 +55,15 @@ class MainActivity : AppCompatActivity(),
      */
     private var tvNavigation = false
 
-    /** State fed by a physical controller (native events or the raw DS3 driver). */
+    /**
+     * Physical controller input, kept per device so one disconnecting drops
+     * only its own contribution.
+     */
+    private val externalInputs = ExternalInputTracker()
+
+    /** Every physical source folded together; merged with touch in [sendMerged]. */
     private val externalState = GamepadState()
     private val mergedState = GamepadState()
-
-    // D-pad key tracking for physical controllers that report keys, not a hat axis.
-    private var extUp = false
-    private var extDown = false
-    private var extLeft = false
-    private var extRight = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -121,6 +122,9 @@ class MainActivity : AppCompatActivity(),
             requestBluetoothPermissions()
         }
 
+        (getSystemService(INPUT_SERVICE) as? InputManager)
+            ?.registerInputDeviceListener(inputDeviceListener, null)
+
         handleUsbIntent(intent)
         ds3Driver.findAttachedDs3()?.let { ds3Driver.openOrRequestPermission(it) }
     }
@@ -134,6 +138,36 @@ class MainActivity : AppCompatActivity(),
         super.onResume()
         // If Bluetooth was off at launch, retry once the user comes back.
         if (::hidManager.isInitialized && hasBluetoothPermissions()) hidManager.start()
+        // A controller may have been unplugged while we were away.
+        pruneDetachedControllers()
+    }
+
+    /**
+     * A physical controller can vanish mid-press — unplugged, switched off, or
+     * out of range. Its buttons and sticks would otherwise stay transmitted as
+     * held, so drop that device's input and resend what is actually left.
+     */
+    private val inputDeviceListener = object : InputManager.InputDeviceListener {
+        override fun onInputDeviceAdded(deviceId: Int) {
+            // The id is live again (possibly reused by different hardware),
+            // so stop ignoring input from it.
+            externalInputs.markAttached(deviceId)
+        }
+        override fun onInputDeviceChanged(deviceId: Int) = Unit
+        override fun onInputDeviceRemoved(deviceId: Int) {
+            if (externalInputs.remove(deviceId)) refreshExternalState()
+        }
+    }
+
+    /** Catch disconnects that happened while the listener was not running. */
+    private fun pruneDetachedControllers() {
+        val attached = InputDevice.getDeviceIds().toHashSet()
+        val stale = externalInputs.sourceIds().filter {
+            it != ExternalInputTracker.SOURCE_DS3 && it !in attached
+        }
+        if (stale.isEmpty()) return
+        stale.forEach { externalInputs.remove(it) }
+        refreshExternalState()
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
@@ -144,6 +178,8 @@ class MainActivity : AppCompatActivity(),
     override fun onDestroy() {
         super.onDestroy()
         // Guarded so a failure during onCreate can't turn into a second crash.
+        (getSystemService(INPUT_SERVICE) as? InputManager)
+            ?.unregisterInputDeviceListener(inputDeviceListener)
         if (::ds3Driver.isInitialized) ds3Driver.release()
         if (::hidManager.isInitialized) hidManager.stop()
         controllerView.setBackgroundImage(null, 0.5f, 0.5f)
@@ -559,16 +595,20 @@ class MainActivity : AppCompatActivity(),
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
-        if (isGamepadEvent(event) && handleGamepadKey(keyCode, pressed = true)) return true
+        if (isGamepadEvent(event) &&
+            handleGamepadKey(event.deviceId, keyCode, pressed = true)
+        ) return true
         return super.onKeyDown(keyCode, event)
     }
 
     override fun onKeyUp(keyCode: Int, event: KeyEvent): Boolean {
-        if (isGamepadEvent(event) && handleGamepadKey(keyCode, pressed = false)) return true
+        if (isGamepadEvent(event) &&
+            handleGamepadKey(event.deviceId, keyCode, pressed = false)
+        ) return true
         return super.onKeyUp(keyCode, event)
     }
 
-    private fun handleGamepadKey(keyCode: Int, pressed: Boolean): Boolean {
+    private fun handleGamepadKey(deviceId: Int, keyCode: Int, pressed: Boolean): Boolean {
         val buttonIndex = when (keyCode) {
             KeyEvent.KEYCODE_BUTTON_A -> HidConstants.BTN_CROSS
             KeyEvent.KEYCODE_BUTTON_B -> HidConstants.BTN_CIRCLE
@@ -586,25 +626,34 @@ class MainActivity : AppCompatActivity(),
             else -> -1
         }
         if (buttonIndex >= 0) {
-            externalState.setButton(buttonIndex, pressed)
+            // A disconnected controller's late events must not revive it.
+            val source = externalInputs.sourceIfAttached(deviceId) ?: return false
+            source.state.setButton(buttonIndex, pressed)
             // Controllers that report triggers as plain keys still need the
             // axis moved, or throttle input never reaches the host.
             when (buttonIndex) {
-                HidConstants.BTN_L2 -> externalState.lt = if (pressed) 255 else 0
-                HidConstants.BTN_R2 -> externalState.rt = if (pressed) 255 else 0
+                HidConstants.BTN_L2 -> source.state.lt = if (pressed) 255 else 0
+                HidConstants.BTN_R2 -> source.state.rt = if (pressed) 255 else 0
             }
-            sendMerged()
+            refreshExternalState()
             return true
         }
+        val isDpad = keyCode == KeyEvent.KEYCODE_DPAD_UP ||
+            keyCode == KeyEvent.KEYCODE_DPAD_DOWN ||
+            keyCode == KeyEvent.KEYCODE_DPAD_LEFT ||
+            keyCode == KeyEvent.KEYCODE_DPAD_RIGHT
+        // Check before touching the tracker, so an unrelated key cannot create
+        // an empty source that then looks like an attached controller.
+        if (!isDpad) return false
+        val source = externalInputs.sourceIfAttached(deviceId) ?: return false
         when (keyCode) {
-            KeyEvent.KEYCODE_DPAD_UP -> extUp = pressed
-            KeyEvent.KEYCODE_DPAD_DOWN -> extDown = pressed
-            KeyEvent.KEYCODE_DPAD_LEFT -> extLeft = pressed
-            KeyEvent.KEYCODE_DPAD_RIGHT -> extRight = pressed
-            else -> return false
+            KeyEvent.KEYCODE_DPAD_UP -> source.keyUp = pressed
+            KeyEvent.KEYCODE_DPAD_DOWN -> source.keyDown = pressed
+            KeyEvent.KEYCODE_DPAD_LEFT -> source.keyLeft = pressed
+            KeyEvent.KEYCODE_DPAD_RIGHT -> source.keyRight = pressed
         }
-        updateExternalHat()
-        sendMerged()
+        source.applyDpad()
+        refreshExternalState()
         return true
     }
 
@@ -612,22 +661,23 @@ class MainActivity : AppCompatActivity(),
         val isJoystick =
             event.source and InputDevice.SOURCE_JOYSTICK == InputDevice.SOURCE_JOYSTICK
         if (isJoystick && event.action == MotionEvent.ACTION_MOVE) {
-            externalState.lx = axisToByte(event.getAxisValue(MotionEvent.AXIS_X))
-            externalState.ly = axisToByte(event.getAxisValue(MotionEvent.AXIS_Y))
-            externalState.rx = axisToByte(event.getAxisValue(MotionEvent.AXIS_Z))
-            externalState.ry = axisToByte(event.getAxisValue(MotionEvent.AXIS_RZ))
+            val source = externalInputs.sourceIfAttached(event.deviceId)
+                ?: return super.onGenericMotionEvent(event)
+            source.state.lx = axisToByte(event.getAxisValue(MotionEvent.AXIS_X))
+            source.state.ly = axisToByte(event.getAxisValue(MotionEvent.AXIS_Y))
+            source.state.rx = axisToByte(event.getAxisValue(MotionEvent.AXIS_Z))
+            source.state.ry = axisToByte(event.getAxisValue(MotionEvent.AXIS_RZ))
 
+            // Recomputed every event, including when the hat returns to centre
+            // — otherwise the last direction stays latched. Key-reported
+            // directions are tracked separately and are not disturbed.
             val hatX = event.getAxisValue(MotionEvent.AXIS_HAT_X)
             val hatY = event.getAxisValue(MotionEvent.AXIS_HAT_Y)
-            if (abs(hatX) > 0.5f || abs(hatY) > 0.5f || (extUp || extDown || extLeft || extRight)) {
-                if (abs(hatX) > 0.5f || abs(hatY) > 0.5f) {
-                    extLeft = hatX < -0.5f
-                    extRight = hatX > 0.5f
-                    extUp = hatY < -0.5f
-                    extDown = hatY > 0.5f
-                }
-                updateExternalHat()
-            }
+            source.axisLeft = hatX < -0.5f
+            source.axisRight = hatX > 0.5f
+            source.axisUp = hatY < -0.5f
+            source.axisDown = hatY > 0.5f
+            source.applyDpad()
 
             val lt = maxOf(
                 event.getAxisValue(MotionEvent.AXIS_LTRIGGER),
@@ -639,29 +689,21 @@ class MainActivity : AppCompatActivity(),
             )
             // Forward the real analog value, not just a pressed/not-pressed
             // bit — a throttle read as on/off is unusable in driving games.
-            externalState.lt = triggerToByte(lt)
-            externalState.rt = triggerToByte(rt)
-            externalState.setButton(HidConstants.BTN_L2, lt > 0.12f)
-            externalState.setButton(HidConstants.BTN_R2, rt > 0.12f)
+            source.state.lt = triggerToByte(lt)
+            source.state.rt = triggerToByte(rt)
+            source.state.setButton(HidConstants.BTN_L2, lt > 0.12f)
+            source.state.setButton(HidConstants.BTN_R2, rt > 0.12f)
 
-            sendMerged()
+            refreshExternalState()
             return true
         }
         return super.onGenericMotionEvent(event)
     }
 
-    private fun updateExternalHat() {
-        externalState.hat = when {
-            extUp && extRight -> 1
-            extRight && extDown -> 3
-            extDown && extLeft -> 5
-            extLeft && extUp -> 7
-            extUp -> 0
-            extRight -> 2
-            extDown -> 4
-            extLeft -> 6
-            else -> HidConstants.HAT_NEUTRAL
-        }
+    /** Refold every attached controller and transmit the result. */
+    private fun refreshExternalState() {
+        externalInputs.combineInto(externalState)
+        sendMerged()
     }
 
     private fun axisToByte(value: Float): Int =
@@ -685,16 +727,22 @@ class MainActivity : AppCompatActivity(),
     }
 
     override fun onDs3State(state: GamepadState) {
-        externalState.copyFrom(state)
-        sendMerged()
+        // Driver reports are posted to the main thread, so one sent just before
+        // the pad was unplugged can still land after the disconnect. Dropping it
+        // here is what stops that late report re-creating the DS3 mid-press.
+        val source = externalInputs.sourceIfAttached(ExternalInputTracker.SOURCE_DS3) ?: return
+        source.state.copyFrom(state)
+        refreshExternalState()
     }
 
     override fun onDs3Status(connected: Boolean, message: String) {
         Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
-        if (!connected) {
-            externalState.reset()
-            extUp = false; extDown = false; extLeft = false; extRight = false
-            sendMerged()
+        if (connected) {
+            // Accept its input again after a previous disconnect.
+            externalInputs.markAttached(ExternalInputTracker.SOURCE_DS3)
+        } else {
+            externalInputs.remove(ExternalInputTracker.SOURCE_DS3)
+            refreshExternalState()
         }
     }
 
