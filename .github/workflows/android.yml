@@ -28,6 +28,34 @@ jobs:
       - name: Run unit tests
         run: ./gradlew --no-daemon :app:testDebugUnitTest
 
+      # Reporting only — the authoritative pass/fail signal is the step above, so a hiccup
+      # here must not fail an otherwise good build. Without it a test task that ran but
+      # executed nothing is indistinguishable in the log from one that passed.
+      - name: Test summary
+        if: always()
+        continue-on-error: true
+        run: |
+          python3 - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import glob, os, xml.etree.ElementTree as ET
+          files = sorted(glob.glob('app/build/test-results/testDebugUnitTest/TEST-*.xml'))
+          print('## Unit tests\n')
+          if not files:
+              print('No test results were produced.')
+              raise SystemExit(0)
+          print('| Suite | Executed | Passed | Failed | Errors | Skipped |')
+          print('|---|--:|--:|--:|--:|--:|')
+          T = F = E = S = 0
+          for path in files:
+              r = ET.parse(path).getroot()
+              t = int(r.get('tests', 0)); f = int(r.get('failures', 0))
+              e = int(r.get('errors', 0)); s = int(r.get('skipped', 0))
+              T += t; F += f; E += e; S += s
+              name = os.path.basename(path)[5:-4].rsplit('.', 1)[-1]
+              print(f'| {name} | {t} | {t - f - e - s} | {f} | {e} | {s} |')
+          print(f'| **Total** | **{T}** | **{T - F - E - S}** | **{F}** | **{E}** | **{S}** |')
+          PY
+          cat "$GITHUB_STEP_SUMMARY"
+
       - name: Upload test report
         if: always()
         uses: actions/upload-artifact@v4
