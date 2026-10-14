@@ -14,6 +14,15 @@
 
     <uses-permission android:name="android.permission.VIBRATE" />
 
+    <!--
+      Both are for the in-app updater in Settings → Check for updates, and for nothing else:
+      fetch the newest release from GitHub, then hand the downloaded APK to Android's own
+      installer, which still asks the user to confirm. Controller input never touches the
+      network — it goes out over the Bluetooth HID link exactly as before.
+    -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
     <uses-feature android:name="android.hardware.bluetooth" android:required="true" />
     <uses-feature android:name="android.hardware.touchscreen" android:required="true" />
     <!-- USB host is optional: only needed for the PS3 controller passthrough -->
@@ -48,6 +57,21 @@
                 android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED"
                 android:resource="@xml/usb_device_filter" />
         </activity>
+
+        <!--
+          Hands the downloaded APK to Android's installer. Not exported: only this app can mint
+          the URI, and the installer is granted read access to that one file for that one
+          intent. res/xml/file_paths.xml shares the update cache directory and nothing else.
+        -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
     </application>
 
 </manifest>

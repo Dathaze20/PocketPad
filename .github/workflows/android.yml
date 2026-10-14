@@ -29,8 +29,9 @@ jobs:
       - name: Run unit tests
         run: ./gradlew --no-daemon :app:testDebugUnitTest
 
-      # Reporting only — the authoritative pass/fail signal is the step above,
-      # so a hiccup here must not fail an otherwise good build.
+      # Reporting only — the authoritative pass/fail signal is the step above, so a hiccup
+      # here must not fail an otherwise good build. Without it a test task that ran but
+      # executed nothing is indistinguishable in the log from one that passed.
       - name: Test summary
         if: always()
         continue-on-error: true
@@ -85,13 +86,125 @@ jobs:
       # Only a push to main publishes. A pull_request run never does, even
       # from a branch named main in a fork: its ref is refs/pull/N/merge and
       # its event is not "push".
+      #
+      # The release also carries version.json, which is what the in-app updater reads. The tag
+      # is "latest", which is not a version at all, and PocketPad's versionCode is assigned by
+      # hand and does not follow from its version name — 2.3.0 is versionCode 17, not 20300 —
+      # so neither the tag nor the name can be turned into the number Android compares.
+      # version.json is generated from the APK that was just built, by reading the number back
+      # out of it, so it cannot drift from the artifact. The APK keeps its name and the release
+      # keeps its tag, so the README download link is unaffected.
+      #
+      # This step never deletes the published release. It used to `gh release delete latest
+      # --cleanup-tag` and recreate it, which took the public download URL away for the length
+      # of the rebuild and destroyed a perfectly good release in order to replace it with the
+      # same version. Assets are now replaced in place with --clobber, and a build that is not
+      # newer than what is already published does not touch the release at all.
       - name: Publish APK to the "latest" release
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
         run: |
+          set -euo pipefail
           cp app/build/outputs/apk/debug/app-debug.apk PocketPad.apk
-          gh release delete latest --yes --cleanup-tag || true
-          gh release create latest PocketPad.apk \
-            --title "PocketPad — newest build" \
-            --notes "Auto-built from the newest commit. On your phone: tap PocketPad.apk below, then open the download to install."
+
+          tools="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)"
+          read_code() { "$tools/aapt2" dump badging "$1" 2>/dev/null \
+            | grep -oP "versionCode='\K[0-9]+" | head -1 || true; }
+
+          badging="$("$tools/aapt2" dump badging PocketPad.apk)"
+          code="$(printf '%s' "$badging" | grep -oP "versionCode='\K[0-9]+" | head -1 || true)"
+          name="$(printf '%s' "$badging" | grep -oP "versionName='\K[^']+" | head -1 || true)"
+          sha="$(sha256sum PocketPad.apk | cut -d' ' -f1)"
+          if [ -z "$code" ] || [ -z "$name" ]; then
+            echo "::error::could not read versionCode/versionName out of the built APK"
+            exit 1
+          fi
+
+          # The signing certificate is the app's identity on Android. An APK signed with a
+          # different key is not an update to what is installed — Android refuses it, and the
+          # only way out for the user is to uninstall, which deletes their layouts and
+          # pairings. Checked before anything is published, and fatal.
+          want_signer="$(keytool -list -v -keystore app/debug.keystore -storepass android \
+            -alias androiddebugkey 2>/dev/null \
+            | grep -iE '^\s*SHA256:' | head -1 | awk '{print $2}' | tr -d ':' | tr 'A-Z' 'a-z')"
+          got_signer="$("$tools/apksigner" verify --print-certs PocketPad.apk 2>/dev/null \
+            | grep -i 'SHA-256 digest' | head -1 | awk '{print $NF}' | tr -d ':' | tr 'A-Z' 'a-z')"
+          echo "::notice::signer sha256 = ${got_signer:-none} (expected ${want_signer:-none})"
+          if [ -z "$want_signer" ] || [ -z "$got_signer" ] || [ "$want_signer" != "$got_signer" ]; then
+            echo "::error::the built APK is not signed with the committed debug keystore - " \
+                 "publishing it would break updates for every existing install"
+            exit 1
+          fi
+
+          # What is published right now. Prefer the manifest; fall back to reading the number
+          # out of the published APK itself, which is how the legacy release — published
+          # before version.json existed — is compared rather than assumed to be older.
+          prev=""
+          if gh release view latest >/dev/null 2>&1; then
+            if gh release download latest -p version.json -D prev 2>/dev/null; then
+              prev="$(grep -oP '"versionCode"\s*:\s*\K[0-9]+' prev/version.json || true)"
+            fi
+            if [ -z "$prev" ] && gh release download latest -p PocketPad.apk -D prevapk 2>/dev/null; then
+              prev="$(read_code prevapk/PocketPad.apk)"
+              [ -n "$prev" ] && echo "::notice::published release has no version.json; read versionCode $prev out of its APK"
+            fi
+            if [ -z "$prev" ]; then
+              echo "::warning::a release is published but its version could not be determined; leaving it alone"
+              exit 0
+            fi
+          else
+            echo "::notice::no release published yet; creating one"
+          fi
+
+          echo "::notice::built PocketPad $name (versionCode $code); published: ${prev:-none}"
+
+          if [ -n "$prev" ] && [ "$code" -le "$prev" ]; then
+            echo "::warning::versionCode $code is not newer than the published $prev, so the " \
+                 "release was left untouched and the download link still serves $prev. Bump " \
+                 "versionCode in app/build.gradle to ship this build to installed phones."
+            exit 0
+          fi
+
+          # Schema read by ReleaseMetadata.parseVersionManifest; see ReleaseMetadataTest.
+          # apkSha256 is required by the app, which refuses a manifest without a usable one.
+          cat > version.json <<JSON
+          {
+            "versionCode": $code,
+            "versionName": "$name",
+            "apk": "PocketPad.apk",
+            "apkSha256": "$sha"
+          }
+          JSON
+          cat version.json
+
+          notes="PocketPad $name (versionCode $code). Auto-built from the newest commit. On your phone: tap PocketPad.apk below, then open the download to install. Already have PocketPad? Settings → Check for updates does this for you."
+          if gh release view latest >/dev/null 2>&1; then
+            # In place: the tag, the release and the download URL all survive, so nobody ever
+            # hits a 404 on the link in the README.
+            gh release upload latest PocketPad.apk version.json --clobber
+            gh release edit latest --title "PocketPad $name — newest build" --notes "$notes"
+          else
+            gh release create latest PocketPad.apk version.json \
+              --title "PocketPad $name — newest build" --notes "$notes"
+          fi
+
+          # The link the README points at must work, and must serve what was just built.
+          # Retried because a freshly uploaded asset can take a moment to be served.
+          asset="https://github.com/$REPO/releases/download/latest/PocketPad.apk"
+          served=""
+          for attempt in 1 2 3 4 5; do
+            status="$(curl -fsSL -o published.apk -w '%{http_code}' "$asset" || true)"
+            if [ "$status" = "200" ]; then
+              served="$(read_code published.apk)"
+              [ "$served" = "$code" ] && break
+            fi
+            echo "attempt $attempt: http ${status:-none}, versionCode ${served:-none}"
+            sleep 5
+          done
+          if [ "$served" != "$code" ]; then
+            echo "::error::$asset did not serve versionCode $code after publishing"
+            exit 1
+          fi
+          echo "::notice::$asset serves versionCode $code"

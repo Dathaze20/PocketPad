@@ -52,4 +52,20 @@
     <string name="bt_permission_needed">Bluetooth permission is required so PocketPad can act as a gamepad. Please allow it.</string>
     <string name="ds3_connected">PS3 controller connected</string>
     <string name="ds3_disconnected">PS3 controller disconnected</string>
+    <!-- In-app updater -->
+    <string name="action_check_updates">Check for updates</string>
+    <string name="update_title">PocketPad updates</string>
+    <string name="update_installed">Installed version %1$s.</string>
+    <string name="update_checking">Checking GitHub for a newer version…</string>
+    <string name="update_up_to_date">PocketPad %1$s is the newest version. You\'re up to date.</string>
+    <string name="update_available">Version %1$s is available. You have %2$s.</string>
+    <string name="update_available_sized">Version %1$s is available (%3$s). You have %2$s.</string>
+    <string name="update_downloading">Downloading… %1$d%%</string>
+    <string name="update_ready">Downloaded and verified. Confirm the install when Android asks — your pairings, layouts and settings are kept.</string>
+    <string name="update_needs_permission">Android needs your permission for PocketPad to install an app. It\'s a one-time switch.</string>
+    <string name="update_no_permission_screen">This phone has no “install unknown apps” screen to open. Install the APK from GitHub instead.</string>
+    <string name="update_action_download">Download and install</string>
+    <string name="update_action_allow">Open that setting</string>
+    <string name="update_close">Close</string>
+    <string name="update_hide">Hide</string>
 </resources>

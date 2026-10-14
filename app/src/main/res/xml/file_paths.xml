@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The one directory the updater writes to, and the only thing this app shares with anything
+  else. Saved layouts, the background picture and the preferences live in private storage and
+  have no entry here, so the FileProvider cannot hand them out.
+-->
+<paths>
+    <cache-path
+        name="updates"
+        path="updates/" />
+</paths>

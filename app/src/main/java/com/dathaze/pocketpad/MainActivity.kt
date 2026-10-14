@@ -34,6 +34,7 @@ import com.dathaze.pocketpad.hid.HidConstants
 import com.dathaze.pocketpad.hid.HidGamepadManager
 import com.dathaze.pocketpad.ui.ControllerView
 import com.dathaze.pocketpad.ui.Haptics
+import com.dathaze.pocketpad.update.UpdateFlow
 import com.dathaze.pocketpad.usb.Ds3UsbDriver
 import kotlin.math.roundToInt
 
@@ -47,6 +48,12 @@ class MainActivity : AppCompatActivity(),
     private lateinit var editBar: android.widget.LinearLayout
     private lateinit var hidManager: HidGamepadManager
     private lateinit var ds3Driver: Ds3UsbDriver
+
+    /**
+     * The in-app updater, built the first time the user picks "Check for updates". An install
+     * that never opens that menu never constructs it and never makes a request.
+     */
+    private var updateFlow: UpdateFlow? = null
 
     /**
      * When on, the pad ALSO sends keyboard keys so it can drive TV menus.
@@ -140,6 +147,10 @@ class MainActivity : AppCompatActivity(),
         if (::hidManager.isInitialized && hasBluetoothPermissions()) hidManager.start()
         // A controller may have been unplugged while we were away.
         pruneDetachedControllers()
+        // Coming back from Android's "install unknown apps" screen: put the update that was
+        // waiting on that permission back in front of the user. Null unless they opened the
+        // updater, so this costs nothing for everyone else.
+        updateFlow?.onActivityResumed()
     }
 
     /**
@@ -283,6 +294,7 @@ class MainActivity : AppCompatActivity(),
             ),
             getString(R.string.action_bt_settings),
             getString(R.string.action_disconnect),
+            getString(R.string.action_check_updates),
             getString(R.string.action_help)
         )
         AlertDialog.Builder(this)
@@ -298,11 +310,25 @@ class MainActivity : AppCompatActivity(),
                     6 -> toggleTvNavigation()
                     7 -> startActivity(Intent(android.provider.Settings.ACTION_BLUETOOTH_SETTINGS))
                     8 -> hidManager.disconnect()
-                    9 -> showHelp()
+                    9 -> checkForUpdates()
+                    10 -> showHelp()
                 }
             }
             .setNegativeButton(android.R.string.cancel, null)
             .show()
+    }
+
+    /**
+     * Opens the in-app updater.
+     *
+     * Only ever reached from this menu. Nothing checks for updates on its own — a check that
+     * fired on launch or in the background could interrupt a game or a Bluetooth session, so
+     * the one that runs is the one the user asked for. The HID link is left untouched; the
+     * dialog sits over the controller and the pad keeps working underneath it.
+     */
+    private fun checkForUpdates() {
+        val flow = updateFlow ?: UpdateFlow(this).also { updateFlow = it }
+        flow.start()
     }
 
     private fun startLayoutEdit() {
