@@ -14,11 +14,11 @@ import org.junit.Test
 class UpdateVersionTest {
 
     /**
-     * The versionCode PocketPad 2.3.0 shipped as — the build on the phone today.
+     * The versionCode PocketPad 2.3.0 shipped as.
      *
-     * The pairing matters: 2.3.0 is 17 and 2.4.0 is 18. Neither number follows from its
-     * version name, which is the whole reason the published code is read out of the APK
-     * rather than computed from a tag. See app/build.gradle.
+     * The pairing matters: 2.3.0 is 17, 2.4.0 is 18, 2.5.0 is 19. None of those numbers
+     * follows from its version name, which is the whole reason the published code is read
+     * out of the APK rather than computed from a tag. See app/build.gradle.
      */
     private val installed = 17
 

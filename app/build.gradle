@@ -16,8 +16,8 @@ android {
         // updater compares this number against the one CI reads back out of the published
         // APK, so bumping it is what makes a build visible to phones that already have
         // PocketPad. See README → Updating.
-        versionCode 18
-        versionName "2.4.0"
+        versionCode 19
+        versionName "2.5.0"
     }
 
     // Release signing: set these four properties in ~/.gradle/gradle.properties

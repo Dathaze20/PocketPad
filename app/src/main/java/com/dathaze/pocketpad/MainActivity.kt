@@ -32,6 +32,7 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.dathaze.pocketpad.hid.ExternalInputTracker
+import com.dathaze.pocketpad.hid.BluetoothReadiness
 import com.dathaze.pocketpad.hid.GamepadState
 import com.dathaze.pocketpad.hid.HidConstants
 import com.dathaze.pocketpad.hid.HidGamepadManager
@@ -224,11 +225,23 @@ class MainActivity : AppCompatActivity(),
 
     // ------------------------------------------------------------ permissions
 
-    private fun hasBluetoothPermissions(): Boolean {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return true
-        return ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT) ==
-            PackageManager.PERMISSION_GRANTED
-    }
+    /**
+     * What the two runtime Bluetooth permissions currently allow.
+     *
+     * Read fresh each time: the user can change either one in system settings while the app
+     * is in the background.
+     */
+    private fun bluetoothReadiness(): BluetoothReadiness = BluetoothReadiness.of(
+        sdkInt = Build.VERSION.SDK_INT,
+        hasConnect = granted(Manifest.permission.BLUETOOTH_CONNECT),
+        hasAdvertise = granted(Manifest.permission.BLUETOOTH_ADVERTISE)
+    )
+
+    private fun granted(permission: String): Boolean =
+        ContextCompat.checkSelfPermission(this, permission) == PackageManager.PERMISSION_GRANTED
+
+    /** Enough to register as a controller and send input. */
+    private fun hasBluetoothPermissions(): Boolean = bluetoothReadiness().canRunHid
 
     private fun requestBluetoothPermissions() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return
@@ -249,10 +262,17 @@ class MainActivity : AppCompatActivity(),
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == REQUEST_BLUETOOTH) {
-            if (hasBluetoothPermissions()) {
-                startHid()
-            } else {
-                statusView.text = getString(R.string.bt_permission_needed)
+            val readiness = bluetoothReadiness()
+            when {
+                readiness.isBlocked -> statusView.text = getString(R.string.bt_permission_needed)
+                // The controller works, but no new host can find the phone. Worth saying out
+                // loud: the old code reported plain READY here and the user was left to work
+                // out for themselves why pairing never succeeded.
+                readiness.isPartiallyBlocked -> {
+                    startHid()
+                    Toast.makeText(this, R.string.bt_advertise_needed, Toast.LENGTH_LONG).show()
+                }
+                else -> startHid()
             }
         }
     }
@@ -609,6 +629,14 @@ class MainActivity : AppCompatActivity(),
     }
 
     private fun makeDiscoverable() {
+        // Discoverability needs BLUETOOTH_ADVERTISE, which is a separate grant from the
+        // BLUETOOTH_CONNECT that the controller itself runs on. Ask for it here instead of
+        // launching an intent the system will refuse.
+        if (!bluetoothReadiness().canBecomeDiscoverable) {
+            Toast.makeText(this, R.string.bt_advertise_needed, Toast.LENGTH_LONG).show()
+            requestBluetoothPermissions()
+            return
+        }
         val intent = Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE)
             .putExtra(BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION, 300)
         try {
@@ -638,7 +666,12 @@ class MainActivity : AppCompatActivity(),
     private fun showHelp() {
         AlertDialog.Builder(this)
             .setTitle(R.string.action_help)
-            .setMessage(R.string.help_text)
+            // The PC/tablet steps are appended rather than folded into help_text: the
+            // phone-has-to-connect-outwards step is the one people miss, and it reads better
+            // as its own block than buried in the TV instructions.
+            .setMessage(
+                getString(R.string.help_text) + "\n\n" + getString(R.string.help_windows)
+            )
             .setPositiveButton(android.R.string.ok, null)
             .show()
     }
@@ -845,6 +878,12 @@ class MainActivity : AppCompatActivity(),
             HidGamepadManager.HidStatus.UNREGISTERED -> getString(R.string.status_unregistered)
             HidGamepadManager.HidStatus.PERMISSION_MISSING ->
                 getString(R.string.bt_permission_needed)
+            HidGamepadManager.HidStatus.REGISTRATION_FAILED ->
+                getString(R.string.status_registration_failed)
+            HidGamepadManager.HidStatus.CONNECT_REFUSED ->
+                getString(R.string.status_connect_refused, deviceName ?: "that device")
+            HidGamepadManager.HidStatus.PROFILE_UNAVAILABLE ->
+                getString(R.string.status_profile_unavailable)
         }
         statusView.setTextColor(STATUS_DIM)
     }

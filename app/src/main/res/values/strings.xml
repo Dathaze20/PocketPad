@@ -3,7 +3,7 @@
     <string name="app_name">PocketPad</string>
     <string name="status_idle">Not connected — tap the gear to connect to your TV</string>
     <string name="status_registering">Registering gamepad…</string>
-    <string name="status_registered">Gamepad ready — waiting for TV</string>
+    <string name="status_registered">Gamepad ready — waiting for a device</string>
     <string name="status_connecting">Connecting to %1$s…</string>
     <string name="status_connected">Connected to %1$s</string>
     <string name="status_disconnected">Disconnected</string>
@@ -69,4 +69,10 @@
     <string name="update_action_allow">Open that setting</string>
     <string name="update_close">Close</string>
     <string name="update_hide">Hide</string>
+    <!-- Bluetooth states the app previously could not tell apart -->
+    <string name="status_registration_failed">Android wouldn\'t register PocketPad as a controller. Another app may be using the controller role — close it, or turn Bluetooth off and on.</string>
+    <string name="status_connect_refused">%1$s turned the controller connection down. Pair the phone from that device\'s Bluetooth settings first, then try again.</string>
+    <string name="status_profile_unavailable">Couldn\'t reach Bluetooth. Turn Bluetooth off and on, then reopen PocketPad.</string>
+    <string name="bt_advertise_needed">PocketPad also needs the \"Nearby devices\" permission to make your phone discoverable. Without it the controller still works with devices you already paired, but no new device can find it.</string>
+    <string name="help_windows">PC (Windows 10/11) and tablets:\n\n1. In PocketPad: tap \u201cMake phone discoverable\u201d.\n2. On the PC: Settings \u2192 Bluetooth &amp; devices \u2192 Add device \u2192 Bluetooth, pick your phone, and confirm the code on both screens.\n3. Back in PocketPad: Settings \u2192 \u201cConnect to a paired device\u201d \u2192 pick the PC.\n\nStep 3 is not optional. A PC that pairs with a phone files it away as a phone and never goes looking for a controller on it, so the phone has to open the controller connection itself. If the PC refuses, PocketPad now says so instead of sitting on \u201cconnecting\u201d.</string>
 </resources>
