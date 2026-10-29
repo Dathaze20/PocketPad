@@ -36,6 +36,7 @@
     <string name="bg_saved">Background saved</string>
     <string name="bg_removed">Background removed</string>
     <string name="bg_load_failed">Couldn\'t load that picture — try another one</string>
+    <string name="bg_loading">Loading picture…</string>
     <string name="edit_save">SAVE</string>
     <string name="edit_reset">DEFAULT</string>
     <string name="edit_cancel">CANCEL</string>
