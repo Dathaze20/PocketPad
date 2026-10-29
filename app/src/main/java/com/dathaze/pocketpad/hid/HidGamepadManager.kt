@@ -37,7 +37,24 @@ class HidGamepadManager(private val context: Context, private val listener: List
         READY,
         CONNECTING,
         UNREGISTERED,
-        PERMISSION_MISSING
+        PERMISSION_MISSING,
+
+        /**
+         * Android refused to register PocketPad as a HID device at all, so there is nothing
+         * for a host to find. Distinct from [UNREGISTERED], which means a registration we
+         * once had was taken away.
+         */
+        REGISTRATION_FAILED,
+
+        /**
+         * The HID profile is registered, but the host turned the controller connection down.
+         * Almost always means the two are not paired yet, or the host does not accept
+         * Bluetooth controllers.
+         */
+        CONNECT_REFUSED,
+
+        /** The phone cannot talk to the Bluetooth stack — no profile proxy. */
+        PROFILE_UNAVAILABLE
     }
 
     interface Listener {
@@ -87,7 +104,13 @@ class HidGamepadManager(private val context: Context, private val listener: List
             return
         }
         started = true
-        bt.getProfileProxy(context, serviceListener, BluetoothProfile.HID_DEVICE)
+        // Returns false when the stack will not hand over the HID_DEVICE proxy, in which case
+        // onServiceConnected never fires. Latching `started` on that would leave the app
+        // stuck on "registering" with nothing on the way and no retry.
+        if (!bt.getProfileProxy(context, serviceListener, BluetoothProfile.HID_DEVICE)) {
+            started = false
+            post { listener.onHidStatus(HidStatus.PROFILE_UNAVAILABLE, null) }
+        }
     }
 
     fun stop() {
@@ -110,27 +133,59 @@ class HidGamepadManager(private val context: Context, private val listener: List
         executor.shutdown()
     }
 
-    /** Bonded (paired) devices, for the "connect to paired device" picker. */
+    /**
+     * Bonded (paired) devices, for the "connect to paired device" picker.
+     *
+     * Resolves the adapter on demand. It used to read only the field that [start] fills in,
+     * so if the Bluetooth permission was granted after launch the picker reported "no paired
+     * devices yet" with a phone full of them — which looks exactly like a pairing problem.
+     */
     fun bondedDevices(): List<BluetoothDevice> =
         try {
-            adapter?.bondedDevices?.toList() ?: emptyList()
+            val bt = adapter ?: systemAdapter()?.also { adapter = it }
+            bt?.bondedDevices?.toList() ?: emptyList()
         } catch (_: SecurityException) {
             emptyList()
         }
 
+    private fun systemAdapter(): BluetoothAdapter? = runCatching {
+        (context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager).adapter
+    }.getOrNull()
+
+    /**
+     * Ask [device] to accept this phone as its controller.
+     *
+     * The phone has to be the one to open the HID channel. A host that paired with a phone
+     * filed it away as a phone — it has no reason to go looking for a controller service on
+     * it — so nothing happens until PocketPad connects outwards. That makes this the one call
+     * standing between "paired" and "working", which is why its result is no longer thrown
+     * away: `connect()` returning false is how the stack says the host refused, and the app
+     * used to answer that by showing "connecting…" until the user gave up.
+     */
     fun connectTo(device: BluetoothDevice) {
         val proxy = hidDevice
-        if (proxy != null && registered) {
-            post { listener.onHidStatus(HidStatus.CONNECTING, safeName(device)) }
-            try {
-                proxy.connect(device)
-            } catch (_: SecurityException) {
-                post { listener.onHidStatus(HidStatus.PERMISSION_MISSING, null) }
-            }
-        } else {
-            // Connect as soon as registration completes.
+        if (proxy == null) {
+            // No proxy yet: remember the request and get one.
             pendingConnect = device
-            if (!started) start()
+            start()
+            return
+        }
+        if (!registered) {
+            // Registered once, not any more — the profile is exclusive, so something else
+            // claimed the HID Device role. Re-register and connect when that lands, rather
+            // than queueing the request against a registration nothing will restore.
+            pendingConnect = device
+            reRegisterAttempts = 0
+            registerSdpApp(proxy)
+            return
+        }
+        post { listener.onHidStatus(HidStatus.CONNECTING, safeName(device)) }
+        try {
+            if (!proxy.connect(device)) {
+                post { listener.onHidStatus(HidStatus.CONNECT_REFUSED, safeName(device)) }
+            }
+        } catch (_: SecurityException) {
+            post { listener.onHidStatus(HidStatus.PERMISSION_MISSING, null) }
         }
     }
 
@@ -153,8 +208,12 @@ class HidGamepadManager(private val context: Context, private val listener: List
         val report = state.toReport()
         if (lastReport?.contentEquals(report) == true) return
         try {
-            proxy.sendReport(device, HidConstants.REPORT_ID, report)
-            lastReport = report
+            // Only remember what the stack accepted. Caching a refused report would make the
+            // next identical state look like a duplicate and get dropped, so a button whose
+            // press was lost could stay pressed on the host until something else moved.
+            if (proxy.sendReport(device, HidConstants.REPORT_ID, report)) {
+                lastReport = report
+            }
         } catch (_: SecurityException) {
         }
     }
@@ -168,10 +227,12 @@ class HidGamepadManager(private val context: Context, private val listener: List
         val device = connectedDevice ?: return
         if (key == lastKey) return
         try {
-            proxy.sendReport(
+            // Cached only on success, for the same reason as the gamepad report above: a
+            // dropped release would leave the key held.
+            val sent = proxy.sendReport(
                 device, HidConstants.REPORT_ID_KEYBOARD, HidConstants.keyboardReport(key)
             )
-            lastKey = key
+            if (sent) lastKey = key
         } catch (_: SecurityException) {
         }
     }
@@ -188,6 +249,10 @@ class HidGamepadManager(private val context: Context, private val listener: List
             hidDevice = null
             registered = false
             connectedDevice = null
+            // Not started any more: the proxy is gone. Leaving this true made start() take
+            // its "already running" path and return without asking for a new proxy, so the
+            // controller stayed dead for the rest of the session.
+            started = false
             post { listener.onHidDisconnected() }
         }
     }
@@ -195,26 +260,48 @@ class HidGamepadManager(private val context: Context, private val listener: List
     private fun registerSdpApp(proxy: BluetoothHidDevice) {
         post { listener.onHidStatus(HidStatus.REGISTERING, null) }
         val sdp = BluetoothHidDeviceAppSdpSettings(
-                "PocketPad Controller",
-                "Wireless Controller",
-                "PocketPad",
-                SUBCLASS,
-                HidConstants.REPORT_DESCRIPTOR
-            )
-            // Ask the host for a low-latency link (~11 ms latency budget),
-            // the same QoS profile real Bluetooth gamepads request.
-            val qos = BluetoothHidDeviceAppQosSettings(
-                BluetoothHidDeviceAppQosSettings.SERVICE_BEST_EFFORT,
-                800, 9, 0, 11250, BluetoothHidDeviceAppQosSettings.MAX
-            )
+            "PocketPad Controller",
+            "Wireless Controller",
+            "PocketPad",
+            SUBCLASS,
+            HidConstants.REPORT_DESCRIPTOR
+        )
         try {
-            proxy.registerApp(sdp, null, qos, liveExecutor(), hidCallback)
+            // registerApp returns false when the stack will not take the registration — most
+            // often because something else already holds the exclusive HID Device role. The
+            // callback then never fires, so without checking this the app sat on "registering"
+            // for good and the user had no way to tell that from a pairing problem.
+            if (!proxy.registerApp(sdp, null, outgoingQos(), liveExecutor(), hidCallback)) {
+                post { listener.onHidStatus(HidStatus.REGISTRATION_FAILED, null) }
+            }
         } catch (_: SecurityException) {
             post { listener.onHidStatus(HidStatus.PERMISSION_MISSING, null) }
         } catch (_: IllegalArgumentException) {
             // Already registered under this SDP record; nothing to do.
         }
     }
+
+    /**
+     * The outgoing L2CAP quality-of-service request, or null to take the stack default.
+     *
+     * This used to always ask for a custom flow spec (best-effort, ~11 ms latency budget).
+     * It is the only non-default thing PocketPad asks of the Bluetooth stack, and a flow spec
+     * is negotiated during L2CAP channel configuration — a host that will not accept the one
+     * being asked for can refuse the channel rather than fall back to something it likes.
+     * Embedded TV stacks are forgiving about this; desktop stacks are documented as stricter,
+     * and every Android HID-device implementation known to work with a PC passes null here.
+     *
+     * So the default is now the stack default: ask for nothing unusual. The custom spec was
+     * never measured to help — the latency the user actually noticed came from sending reports
+     * before triggering haptics and from halving the number of reports, both unaffected here.
+     *
+     * [REQUEST_CUSTOM_QOS] flips it back in one line if a host turns out to need it.
+     */
+    private fun outgoingQos(): BluetoothHidDeviceAppQosSettings? =
+        if (!REQUEST_CUSTOM_QOS) null else BluetoothHidDeviceAppQosSettings(
+            BluetoothHidDeviceAppQosSettings.SERVICE_BEST_EFFORT,
+            800, 9, 0, 11250, BluetoothHidDeviceAppQosSettings.MAX
+        )
 
     /** Re-register a dropped gamepad, backing off so it cannot spin. */
     private fun scheduleReRegister() {
@@ -328,5 +415,13 @@ class HidGamepadManager(private val context: Context, private val listener: List
          */
         const val SUBCLASS: Byte = BluetoothHidDevice.SUBCLASS1_COMBO
         const val MAX_REREGISTER_ATTEMPTS = 4
+
+        /**
+         * Whether to ask for a custom L2CAP flow spec instead of the stack default.
+         *
+         * False is the compatible choice; see [outgoingQos]. Set to true only to restore the
+         * pre-2.5 behaviour, and only if a host is found that actually needs it.
+         */
+        const val REQUEST_CUSTOM_QOS = false
     }
 }

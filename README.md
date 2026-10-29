@@ -247,15 +247,17 @@ Publishing to Google Play is documented step by step in **[docs/PLAY_STORE_CHECK
 
 - **Android 9 (API 28) or newer.** `BluetoothHidDevice` does not exist before that, which sets the floor.
 - A phone whose Bluetooth stack actually implements the **HID Device** profile. The API is standard, but support is ultimately up to the OEM's stack, so this is worth confirming on an unfamiliar device.
-- A host that accepts standard Bluetooth HID controllers.
+- A host that accepts standard Bluetooth HID controllers. Confirmed working on a Samsung Tizen TV. Windows 10/11, Android tablets and other HID hosts are **supported by design but not verified on hardware** — see the note on PCs below.
 - USB passthrough additionally needs a **data-capable** USB-C OTG adapter; charge-only cables will not work, and the DualShock 3 draws bus power.
 
 **Limitations to be aware of**
 
 - **Pair from the host's input-device list.** Selecting the phone from an audio/Bluetooth-speaker menu attempts the wrong kind of connection.
+- **On a PC, the phone has to open the connection.** Windows pairs the phone as a *phone* — its Class of Device says so, and Android does not let an app change that — so it never goes looking for a controller service on it. Pairing alone therefore does nothing visible. After pairing, use **Settings → Connect to a paired device** in PocketPad and pick the PC; that outbound connection is what makes the host enumerate the HID device. The same applies to tablets and anything else that treats a phone as a phone.
 - **Hosts cache a controller's capabilities at pairing time.** After an update that changes the HID descriptor — analog triggers were added in 2.2 — an already-paired host must be un-paired and paired again before it sees the new capabilities.
 - **The Bluetooth HID Device role is exclusive.** Another app claiming it will drop PocketPad's registration; the app re-registers automatically, but only one HID-device app can hold the role at a time.
 - **Not every host application accepts gamepad input**, even when the pairing itself succeeds.
+- **PocketPad is a standard HID gamepad, not an Xbox/XInput controller.** Windows games that only read XInput will not see it, however well the Bluetooth side works; that is a property of the game, not of the pairing, and no Bluetooth change can alter it. Games and emulators that read DirectInput/raw HID do see it.
 - **TV menu keys are off by default** and should stay off while playing: with them on, ✕/A also sends Enter and ○/B also sends Escape, which some clients read as a request to quit.
 - **Sideloaded installs trigger Play Protect**, and builds signed with a different key than an existing install cannot replace it — see [docs/INSTALL.md](docs/INSTALL.md).
 - **Bluetooth input latency depends on the host, the radio environment and distance.** No timing figures are claimed here because none have been measured for this project.
