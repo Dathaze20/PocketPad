@@ -96,9 +96,14 @@ class Ds3UsbDriver(private val context: Context, private val listener: Listener)
             return
         }
 
-        // Wake the DS3: SET_REPORT (0x09), feature report 0xF4.
+        // Wake the DS3: SET_REPORT (0x09), feature report 0xF4. Until this lands the pad sends
+        // nothing at all, so its result is the difference between a working controller and one
+        // that sits there silently — it must not be discarded. A negative return means the
+        // command did not go through; the pad is still opened, because some adapters report a
+        // failure for a transfer that in fact worked, but the user is told rather than left
+        // with a pad that looks connected and does nothing.
         val enable = byteArrayOf(0x42, 0x0C, 0x00, 0x00)
-        conn.controlTransfer(
+        val woken = conn.controlTransfer(
             0x21,           // host-to-device | class | interface
             0x09,           // SET_REPORT
             0x03F4,         // (feature << 8) | report id 0xF4
@@ -110,7 +115,12 @@ class Ds3UsbDriver(private val context: Context, private val listener: Listener)
         claimedInterface = iface
         running = true
         registerDetachReceiver()
-        status(true, "PS3 controller connected")
+        status(
+            true,
+            if (woken >= 0) "PS3 controller connected"
+            else "PS3 pad: connected, but it didn't accept the start command — " +
+                "unplug it and plug it back in"
+        )
 
         readerThread = Thread({ readLoop(conn, endpoint) }, "ds3-reader").also { it.start() }
     }

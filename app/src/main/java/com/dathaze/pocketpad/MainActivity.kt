@@ -9,8 +9,11 @@ import android.content.pm.PackageManager
 import android.hardware.input.InputManager
 import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.view.InputDevice
 import android.view.KeyEvent
 import android.view.MotionEvent
@@ -33,6 +36,7 @@ import com.dathaze.pocketpad.hid.BluetoothReadiness
 import com.dathaze.pocketpad.hid.GamepadState
 import com.dathaze.pocketpad.hid.HidConstants
 import com.dathaze.pocketpad.hid.HidGamepadManager
+import com.dathaze.pocketpad.ui.BackgroundImage
 import com.dathaze.pocketpad.ui.ControllerView
 import com.dathaze.pocketpad.ui.Haptics
 import com.dathaze.pocketpad.update.UpdateFlow
@@ -43,6 +47,8 @@ class MainActivity : AppCompatActivity(),
     ControllerView.Listener,
     HidGamepadManager.Listener,
     Ds3UsbDriver.Listener {
+
+    private val mainHandler = Handler(Looper.getMainLooper())
 
     private lateinit var controllerView: ControllerView
     private lateinit var statusView: TextView
@@ -122,7 +128,7 @@ class MainActivity : AppCompatActivity(),
         ds3Driver = Ds3UsbDriver(this, this)
 
         restoreControllerPrefs()
-        loadBackgroundImage(resetPan = false)
+        loadBackgroundImage()
 
         if (hasBluetoothPermissions()) {
             startHid()
@@ -194,7 +200,10 @@ class MainActivity : AppCompatActivity(),
             ?.unregisterInputDeviceListener(inputDeviceListener)
         if (::ds3Driver.isInitialized) ds3Driver.release()
         if (::hidManager.isInitialized) hidManager.stop()
-        controllerView.setBackgroundImage(null, 0.5f, 0.5f)
+        // Guarded for the same reason as the two above: setContentView or findViewById failing
+        // would leave this unset, and an unguarded read here would throw on the way out and
+        // bury the exception that actually caused the problem.
+        if (::controllerView.isInitialized) controllerView.setBackgroundImage(null, 0.5f, 0.5f)
     }
 
     private fun enterImmersiveMode() {
@@ -371,45 +380,97 @@ class MainActivity : AppCompatActivity(),
         ActivityResultContracts.PickVisualMedia()
     ) { uri ->
         if (uri == null) return@registerForActivityResult
-        try {
-            contentResolver.openInputStream(uri)?.use { input ->
-                backgroundFile().outputStream().use { output -> input.copyTo(output) }
+        importBackgroundImage(uri)
+    }
+
+    /**
+     * Copy the chosen picture into the app's own storage, then decode it — both off the main
+     * thread.
+     *
+     * Neither step belongs on the main thread. The picker can hand back a photo that lives in
+     * the cloud, and opening its stream is what downloads it, so the copy is a network transfer
+     * of unknown length; decoding a full-resolution photo twice is not quick either. Doing that
+     * where the UI runs is how a slow connection turns into "PocketPad isn't responding".
+     *
+     * The copy goes through a scratch file. Writing straight into the saved picture emptied it
+     * first, so anything that failed partway destroyed the background the user already had —
+     * see [BackgroundImage.replaceOnlyIfWritten].
+     */
+    private fun importBackgroundImage(uri: Uri) {
+        Toast.makeText(this, R.string.bg_loading, Toast.LENGTH_SHORT).show()
+        onBackgroundThread {
+            val copied = BackgroundImage.replaceOnlyIfWritten(backgroundFile()) { output ->
+                val input = contentResolver.openInputStream(uri)
+                    ?: throw java.io.IOException("the picture could not be opened")
+                input.use { it.copyTo(output) }
             }
-            loadBackgroundImage(resetPan = true)
-            startBackgroundPan()
-        } catch (e: Exception) {
-            Toast.makeText(this, R.string.bg_load_failed, Toast.LENGTH_LONG).show()
+            val bitmap = if (copied) decodeBackgroundImage() else null
+            mainHandler.post {
+                if (!acceptBackground(bitmap)) return@post
+                getPreferences(MODE_PRIVATE).edit()
+                    .putFloat(PREF_BG_X, 0.5f)
+                    .putFloat(PREF_BG_Y, 0.5f)
+                    .apply()
+                controllerView.setBackgroundImage(bitmap, 0.5f, 0.5f)
+                startBackgroundPan()
+            }
         }
     }
 
-    /** Decode the saved picture at roughly screen resolution (avoids OOM). */
-    private fun loadBackgroundImage(resetPan: Boolean) {
+    /** Decode and show the saved picture, if there is one. Returns immediately. */
+    private fun loadBackgroundImage() {
+        if (!backgroundFile().exists()) return
+        onBackgroundThread {
+            val bitmap = decodeBackgroundImage()
+            mainHandler.post {
+                if (!acceptBackground(bitmap)) return@post
+                val prefs = getPreferences(MODE_PRIVATE)
+                controllerView.setBackgroundImage(
+                    bitmap,
+                    prefs.getFloat(PREF_BG_X, 0.5f),
+                    prefs.getFloat(PREF_BG_Y, 0.5f)
+                )
+            }
+        }
+    }
+
+    /**
+     * Main-thread gate for a decode that has just come back.
+     *
+     * A decode outlives the activity that asked for it, so by the time it lands the window may
+     * be gone — handing the bitmap to a dead view would hold several megabytes alive with
+     * nothing to draw it. Reports the failure to the user only while there is still someone
+     * there to read it.
+     */
+    private fun acceptBackground(bitmap: Bitmap?): Boolean {
+        if (isDestroyed || isFinishing) {
+            bitmap?.recycle()
+            return false
+        }
+        if (bitmap == null) {
+            Toast.makeText(this, R.string.bg_load_failed, Toast.LENGTH_LONG).show()
+            return false
+        }
+        return true
+    }
+
+    /** Decode the saved picture at roughly screen resolution (avoids OOM). Blocks. */
+    private fun decodeBackgroundImage(): Bitmap? {
         val file = backgroundFile()
-        if (!file.exists()) return
+        if (!file.exists()) return null
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeFile(file.path, bounds)
         val targetLongSide = resources.displayMetrics.let { maxOf(it.widthPixels, it.heightPixels) }
-        var sample = 1
-        while (maxOf(bounds.outWidth, bounds.outHeight) / (sample * 2) >= targetLongSide) {
-            sample *= 2
-        }
-        val bitmap: Bitmap? = BitmapFactory.decodeFile(
+        val sample = BackgroundImage.sampleSizeFor(bounds.outWidth, bounds.outHeight, targetLongSide)
+        return BitmapFactory.decodeFile(
             file.path,
             BitmapFactory.Options().apply { inSampleSize = sample }
         )
-        if (bitmap == null) {
-            Toast.makeText(this, R.string.bg_load_failed, Toast.LENGTH_LONG).show()
-            return
-        }
-        val prefs = getPreferences(MODE_PRIVATE)
-        if (resetPan) {
-            prefs.edit().putFloat(PREF_BG_X, 0.5f).putFloat(PREF_BG_Y, 0.5f).apply()
-        }
-        controllerView.setBackgroundImage(
-            bitmap,
-            prefs.getFloat(PREF_BG_X, 0.5f),
-            prefs.getFloat(PREF_BG_Y, 0.5f)
-        )
+    }
+
+    /** Same shape the updater and the USB reader already use: a plain daemon thread. */
+    private fun onBackgroundThread(work: () -> Unit) {
+        Thread(work, "pocketpad-background-image").apply { isDaemon = true }.start()
     }
 
     private fun startBackgroundPan() {
