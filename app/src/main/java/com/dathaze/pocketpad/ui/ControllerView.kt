@@ -311,16 +311,9 @@ class ControllerView @JvmOverloads constructor(
         }
 
         private fun update(x: Float, y: Float, first: Boolean) {
-            val dx = x - cx
-            val dy = y - cy
-            val dist = hypot(dx.toDouble(), dy.toDouble())
-            val newHat = if (dist < radius * 0.18) {
-                HidConstants.HAT_NEUTRAL
-            } else {
-                // Angle 0 = up, clockwise; snap to nearest of 8 directions.
-                val deg = (Math.toDegrees(atan2(dx.toDouble(), -dy.toDouble())) + 360.0) % 360.0
-                ((deg + 22.5) / 45.0).toInt() % 8
-            }
+            // Angle 0 = up, clockwise, snapped to the nearest of 8 directions. The arithmetic
+            // lives in ControlGeometry so it can be tested without a View.
+            val newHat = ControlGeometry.hatFor(x - cx, y - cy, radius)
             if (newHat != touchState.hat) {
                 touchState.hat = newHat
                 notifyChanged()
