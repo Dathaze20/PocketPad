@@ -212,7 +212,14 @@ class ControllerView @JvmOverloads constructor(
             }
         }
 
+        /** Where the finger landed, so a trigger can tell how far it has since slid. */
+        private var downY = 0f
+
+        private val isTrigger: Boolean
+            get() = buttonIndex == HidConstants.BTN_L2 || buttonIndex == HidConstants.BTN_R2
+
         override fun onDown(x: Float, y: Float) {
+            downY = y
             touchState.setButton(buttonIndex, true)
             setTrigger(255)
             // Transmit first, buzz second. The vibrator call takes a moment to
@@ -222,6 +229,19 @@ class ControllerView @JvmOverloads constructor(
             if (isHome) postDelayed(longPressRunnable, 700)
         }
 
+        /**
+         * Sliding up from a trigger eases it off; everything else ignores movement.
+         *
+         * A press still starts at full scale and a finger that stays put never changes, so
+         * tapping and holding behave exactly as they always have. This only adds a way to
+         * feather a throttle, which a button alone cannot do.
+         */
+        override fun onMove(x: Float, y: Float) {
+            if (!isTrigger) return
+            val value = ControlGeometry.triggerValue(y - downY, radius)
+            if (setTrigger(value)) notifyChanged()
+        }
+
         override fun onUp() {
             if (isHome) removeCallbacks(longPressRunnable)
             touchState.setButton(buttonIndex, false)
@@ -229,13 +249,14 @@ class ControllerView @JvmOverloads constructor(
             notifyChanged()
         }
 
-        /** L2/R2 are triggers, so they drive the analog axis as well as the
-         *  button bit — games that read a throttle need the axis. */
-        private fun setTrigger(value: Int) {
-            when (buttonIndex) {
-                HidConstants.BTN_L2 -> touchState.lt = value
-                HidConstants.BTN_R2 -> touchState.rt = value
-            }
+        /**
+         * L2/R2 are triggers, so they drive the analog axis as well as the button bit — games
+         * that read a throttle need the axis. Returns whether anything actually changed.
+         */
+        private fun setTrigger(value: Int): Boolean = when (buttonIndex) {
+            HidConstants.BTN_L2 -> (touchState.lt != value).also { touchState.lt = value }
+            HidConstants.BTN_R2 -> (touchState.rt != value).also { touchState.rt = value }
+            else -> false
         }
 
         override fun draw(canvas: Canvas) {
@@ -472,20 +493,13 @@ class ControllerView @JvmOverloads constructor(
         }
 
         private fun update(x: Float, y: Float) {
-            var dx = x - cx
-            var dy = y - cy
-            val dist = hypot(dx.toDouble(), dy.toDouble()).toFloat()
-            val max = radius * 0.82f
-            if (dist > max && dist > 0f) {
-                dx *= max / dist
-                dy *= max / dist
-            }
-            knobX = dx
-            knobY = dy
-            setAxes(
-                (128 + (dx / max) * 127).roundToInt().coerceIn(0, 255),
-                (128 + (dy / max) * 127).roundToInt().coerceIn(0, 255)
-            )
+            // Travel, clamping and the dead zone all live in ControlGeometry so they can be
+            // tested. The knob position is kept separate from the axis values, so resting
+            // inside the dead zone still moves the drawn thumb instead of looking stuck.
+            val reading = ControlGeometry.stickReading(x - cx, y - cy, radius)
+            knobX = reading.knobX
+            knobY = reading.knobY
+            setAxes(reading.x, reading.y)
         }
 
         private fun setAxes(ax: Int, ay: Int) {
@@ -930,6 +944,46 @@ class ControllerView @JvmOverloads constructor(
         }
     }
 
+    /**
+     * The free control nearest this touch, or null when none reaches it.
+     *
+     * Nearest rather than first-in-the-list: hit areas are deliberately larger than what is
+     * drawn, so they can overlap, and list order used to decide the winner. Since the sticks
+     * are listed before the face buttons, a face button moved near a stick in the layout editor
+     * became permanently unpressable.
+     */
+    private fun pickControlAt(x: Float, y: Float): Control? {
+        var best: Control? = null
+        var bestScore = Float.MAX_VALUE
+        for (control in activeControls) {
+            if (control.pressed) continue
+            val score = ControlGeometry.hitScore(x - control.cx, y - control.cy, control.radius)
+            if (ControlGeometry.isHit(score) && score < bestScore) {
+                bestScore = score
+                best = control
+            }
+        }
+        return best
+    }
+
+    /**
+     * Pairs of visible controls whose touch areas intersect in the current layout.
+     *
+     * Overlap no longer makes a control unreachable, but it does make one of the pair harder to
+     * hit than it looks, so the editor says so on save rather than letting it pass unnoticed.
+     */
+    fun overlappingControlCount(): Int {
+        var count = 0
+        for (i in activeControls.indices) {
+            for (j in i + 1 until activeControls.size) {
+                val a = activeControls[i]
+                val b = activeControls[j]
+                if (ControlGeometry.overlaps(a.cx, a.cy, a.radius, b.cx, b.cy, b.radius)) count++
+            }
+        }
+        return count
+    }
+
     private fun releaseAllPointers() {
         for (control in activeControls) {
             if (control.pressed) {
@@ -1253,7 +1307,7 @@ class ControllerView @JvmOverloads constructor(
                 }
                 val x = event.getX(index)
                 val y = event.getY(index)
-                val control = activeControls.firstOrNull { !it.pressed && it.contains(x, y) }
+                val control = pickControlAt(x, y)
                 if (control != null) {
                     control.pointerId = id
                     control.onDown(x, y)
@@ -1342,7 +1396,7 @@ class ControllerView @JvmOverloads constructor(
                 val index = event.actionIndex
                 val x = event.getX(index)
                 val y = event.getY(index)
-                val control = activeControls.firstOrNull { !it.pressed && it.contains(x, y) }
+                val control = pickControlAt(x, y)
                 if (control != null) {
                     control.pointerId = event.getPointerId(index)
                     haptics.tick()

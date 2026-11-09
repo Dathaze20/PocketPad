@@ -92,9 +92,21 @@ class MainActivity : AppCompatActivity(),
             if (controllerView.isPanningBackground) {
                 saveBackgroundPan()
             } else {
+                val overlaps = controllerView.overlappingControlCount()
                 controllerView.saveEditedLayout()
                 finishLayoutEdit()
-                Toast.makeText(this, R.string.edit_saved, Toast.LENGTH_SHORT).show()
+                // Overlapping controls are still reachable — the nearest one wins — but one of
+                // each pair is harder to hit than it looks, and silently saving a layout with a
+                // button hidden under a stick is how a control ends up feeling broken.
+                Toast.makeText(
+                    this,
+                    if (overlaps > 0) {
+                        resources.getQuantityString(R.plurals.edit_saved_overlap, overlaps, overlaps)
+                    } else {
+                        getString(R.string.edit_saved)
+                    },
+                    if (overlaps > 0) Toast.LENGTH_LONG else Toast.LENGTH_SHORT
+                ).show()
             }
         }
         findViewById<android.widget.Button>(R.id.editReset).setOnClickListener {

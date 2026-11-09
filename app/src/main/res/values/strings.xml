@@ -42,6 +42,10 @@
     <string name="edit_cancel">CANCEL</string>
     <string name="edit_hint">Drag any button where you want it, then tap SAVE. DEFAULT puts everything back.</string>
     <string name="edit_saved">Layout saved</string>
+    <plurals name="edit_saved_overlap">
+        <item quantity="one">Layout saved — %1$d pair of buttons overlaps. The nearer one wins, so the other is harder to hit. RESET restores the default layout.</item>
+        <item quantity="other">Layout saved — %1$d pairs of buttons overlap. The nearer one wins, so the others are harder to hit. RESET restores the default layout.</item>
+    </plurals>
     <string name="edit_defaults_restored">Default layout restored</string>
     <string name="action_tv_nav_on">TV menu keys: ON — turn OFF to play</string>
     <string name="action_tv_nav_off">TV menu keys: OFF — turn ON to browse menus</string>
