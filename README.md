@@ -6,7 +6,7 @@ The phone registers itself with Android's native `BluetoothHidDevice` API as a B
 
 **Nothing has to be installed on the receiving device.** There is no companion app, no pairing server, and no proprietary network protocol: input travels over the Bluetooth HID link and, optionally, over USB from a controller plugged into the phone.
 
-The app does hold the `INTERNET` permission, for one thing only — **Settings → Check for updates**, which asks GitHub whether a newer release exists and, if you say yes, downloads the APK. Nothing else in the app reaches the network, the check runs only when you tap it, and no button press, layout, background picture or setting is ever uploaded. See [Updating](#updating) and [docs/PRIVACY_POLICY.md](docs/PRIVACY_POLICY.md).
+The app does hold the `INTERNET` permission, for one thing only — asking GitHub whether a newer PocketPad has been released. **Settings → Check for updates** does that whenever you tap it, and a few seconds after launch the app does it quietly on its own, **at most once a day**, showing a small dismissible strip only if something newer exists. Nothing downloads or installs without you pressing Download, there is no background polling and no system notification, and no button press, layout, background picture or setting is ever uploaded. See [Updating](#updating) and [docs/PRIVACY_POLICY.md](docs/PRIVACY_POLICY.md).
 
 That is the main thing separating PocketPad from most "phone as controller" projects, which stream input to a helper application or a desktop server over Wi-Fi. PocketPad speaks the standard the host already understands.
 
@@ -263,7 +263,7 @@ Publishing to Google Play is documented step by step in **[docs/PLAY_STORE_CHECK
 - **Bluetooth input latency depends on the host, the radio environment and distance.** No timing figures are claimed here because none have been measured for this project.
 - Hardware behaviour — pairing, per-game input handling, USB OTG — can only be confirmed on real devices. Continuous integration proves the project compiles, not that a given TV will accept it.
 
-**Privacy.** The app collects nothing. Its only network use is the update check you start yourself. See [docs/PRIVACY_POLICY.md](docs/PRIVACY_POLICY.md).
+**Privacy.** The app collects nothing. Its only network use is the update check — the one you start yourself and a quiet once-a-day one that only ever shows a dismissible strip. See [docs/PRIVACY_POLICY.md](docs/PRIVACY_POLICY.md).
 
 ---
 

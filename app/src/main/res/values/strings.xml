@@ -103,4 +103,12 @@
     <string name="sheet_vibration_off">Off</string>
     <string name="sheet_vibration_light">Light</string>
     <string name="sheet_vibration_strong">Strong</string>
+
+    <!-- Automatic update notice -->
+    <string name="banner_title">PocketPad %1$s is available</string>
+    <string name="banner_subtitle">You have %1$s \u00B7 %2$s. Installs over this one; nothing is lost.</string>
+    <string name="banner_subtitle_no_size">You have %1$s. Installs over this one; nothing is lost.</string>
+    <string name="banner_update_now">Update Now</string>
+    <string name="banner_dismiss_glyph" translatable="false">\u2715</string>
+    <string name="banner_dismiss_description">Dismiss for today</string>
 </resources>

@@ -40,7 +40,9 @@ import com.dathaze.pocketpad.ui.BackgroundImage
 import com.dathaze.pocketpad.ui.ControllerView
 import com.dathaze.pocketpad.ui.Haptics
 import com.dathaze.pocketpad.ui.SettingsSheet
+import com.dathaze.pocketpad.update.AppUpdater
 import com.dathaze.pocketpad.update.UpdateFlow
+import com.dathaze.pocketpad.update.UpdateNoticeController
 import com.dathaze.pocketpad.usb.Ds3UsbDriver
 import kotlin.math.roundToInt
 
@@ -62,6 +64,14 @@ class MainActivity : AppCompatActivity(),
      * that never opens that menu never constructs it and never makes a request.
      */
     private var updateFlow: UpdateFlow? = null
+
+    /**
+     * The quiet once-a-day update check and its strip. Created lazily so nothing happens
+     * unless [onCreate] schedules it.
+     */
+    private val updateNotice by lazy {
+        UpdateNoticeController(this, AppUpdater(this)) { openUpdateFlow() }
+    }
 
     /**
      * When on, the pad ALSO sends keyboard keys so it can drive TV menus.
@@ -154,6 +164,10 @@ class MainActivity : AppCompatActivity(),
 
         handleUsbIntent(intent)
         ds3Driver.findAttachedDs3()?.let { ds3Driver.openOrRequestPermission(it) }
+
+        // Quietly asks GitHub a few seconds from now whether anything newer is published, at
+        // most once a day, and says nothing unless there is. Never downloads on its own.
+        updateNotice.scheduleAutomaticCheck()
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -171,6 +185,9 @@ class MainActivity : AppCompatActivity(),
         // waiting on that permission back in front of the user. Null unless they opened the
         // updater, so this costs nothing for everyone else.
         updateFlow?.onActivityResumed()
+        // A version dismissed earlier stays dismissed; this only re-evaluates, it does not
+        // re-show what was already waved away.
+        updateNotice.refresh()
     }
 
     /**
@@ -211,6 +228,7 @@ class MainActivity : AppCompatActivity(),
         // Guarded so a failure during onCreate can't turn into a second crash.
         (getSystemService(INPUT_SERVICE) as? InputManager)
             ?.unregisterInputDeviceListener(inputDeviceListener)
+        updateNotice.dispose()
         if (::ds3Driver.isInitialized) ds3Driver.release()
         if (::hidManager.isInitialized) hidManager.stop()
         // Guarded for the same reason as the two above: setContentView or findViewById failing
@@ -372,7 +390,7 @@ class MainActivity : AppCompatActivity(),
 
         override fun tvMenuKeysOn(): Boolean = tvNavigation
 
-        override fun pendingUpdateLabel(): String? = null
+        override fun pendingUpdateLabel(): String? = updateNotice.pendingUpdateLabel()
 
         override fun onConnectToPaired() = showPairedDevicePicker()
         override fun onMakeDiscoverable() = makeDiscoverable()
@@ -397,7 +415,13 @@ class MainActivity : AppCompatActivity(),
      * the one that runs is the one the user asked for. The HID link is left untouched; the
      * dialog sits over the controller and the pad keeps working underneath it.
      */
-    private fun checkForUpdates() {
+    /**
+     * The manual menu action. Always does a fresh check — the once-a-day window belongs to the
+     * automatic notice and must never make the button refuse to look.
+     */
+    private fun checkForUpdates() = openUpdateFlow()
+
+    private fun openUpdateFlow() {
         val flow = updateFlow ?: UpdateFlow(this).also { updateFlow = it }
         flow.start()
     }
