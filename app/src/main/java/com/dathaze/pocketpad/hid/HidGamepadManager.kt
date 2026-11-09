@@ -83,10 +83,22 @@ class HidGamepadManager(private val context: Context, private val listener: List
     /** Pending gamepad frames. See [ReportQueue] for why this is not just "the latest state". */
     private val queue = ReportQueue()
 
-    /** Pending TV-menu keystrokes, kept in order for the same reason. */
-    private val keyQueue = ArrayDeque<Byte>()
-    private var lastSentKey: Byte = HidConstants.KEY_NONE
-    private var retryScheduled = false
+    /** Pending TV-menu keystrokes, kept in order and bounded for the same reasons. */
+    private val keyQueue = KeyReportQueue()
+
+    /** Decides when the stack may be tried again. See [DrainPolicy] for why this is not a flag. */
+    private val drainPolicy = DrainPolicy()
+
+    /**
+     * One instance, so the pending callback can actually be cancelled.
+     *
+     * A fresh lambda each time could be posted but never removed, which is half of how the
+     * retries used to stack up.
+     */
+    private val drainRetry = Runnable {
+        drainPolicy.onRetryFired()
+        drain()
+    }
 
     val isConnected: Boolean get() = connectedDevice != null
     val currentDevice: BluetoothDevice? get() = connectedDevice
@@ -215,7 +227,9 @@ class HidGamepadManager(private val context: Context, private val listener: List
     fun send(state: GamepadState) {
         if (connectedDevice == null) return
         queue.offer(state.toReport())
-        drain()
+        // Always queued; only drained when no retry is outstanding. Draining here during a
+        // backoff is what used to spend the queue's retry budget at touch-sample rate.
+        if (drainPolicy.mayDrainNow()) drain()
     }
 
     /**
@@ -227,11 +241,8 @@ class HidGamepadManager(private val context: Context, private val listener: List
      */
     fun sendKey(key: Byte) {
         if (connectedDevice == null) return
-        if (keyQueue.lastOrNull() == key) return
-        if (keyQueue.isEmpty() && key == lastSentKey) return
-        keyQueue.addLast(key)
-        while (keyQueue.size > KEY_QUEUE_CAPACITY) keyQueue.removeFirst()
-        drain()
+        keyQueue.offer(key)
+        if (drainPolicy.mayDrainNow()) drain()
     }
 
     /**
@@ -247,12 +258,9 @@ class HidGamepadManager(private val context: Context, private val listener: List
         if (proxy == null || device == null) {
             // Nothing to send to. Holding frames for a host that is gone would mean replaying
             // them at whatever connects next.
-            queue.reset()
-            keyQueue.clear()
-            retryScheduled = false
+            resetDelivery()
             return
         }
-        retryScheduled = false
 
         // Gamepad frames first: they are the ones with a latency budget.
         while (true) {
@@ -275,37 +283,42 @@ class HidGamepadManager(private val context: Context, private val listener: List
             }
         }
 
-        while (keyQueue.isNotEmpty()) {
-            val key = keyQueue.first()
+        while (true) {
+            val key = keyQueue.peek() ?: break
             val accepted = try {
                 proxy.sendReport(
                     device, HidConstants.REPORT_ID_KEYBOARD, HidConstants.keyboardReport(key)
                 )
             } catch (_: SecurityException) {
-                keyQueue.clear()
+                keyQueue.reset()
                 return
             }
-            if (!accepted) {
+            if (accepted) {
+                keyQueue.onSent()
+                continue
+            }
+            // Bounded, like the gamepad path: a key the stack will never take must not keep
+            // a timer running for the rest of the session.
+            if (keyQueue.onFailed() == KeyReportQueue.Outcome.RETRY) {
                 scheduleDrain()
                 return
             }
-            keyQueue.removeFirst()
-            lastSentKey = key
         }
     }
 
     private fun scheduleDrain() {
-        if (retryScheduled) return
-        retryScheduled = true
-        mainHandler.postDelayed({ drain() }, RETRY_DELAY_MS)
+        if (!drainPolicy.onRetryNeeded()) return
+        mainHandler.postDelayed(drainRetry, RETRY_DELAY_MS)
     }
 
     /** Forget everything pending. Used when the link drops and when the manager shuts down. */
     private fun resetDelivery() {
         queue.reset()
-        keyQueue.clear()
-        lastSentKey = HidConstants.KEY_NONE
-        retryScheduled = false
+        keyQueue.reset()
+        // Cancel the outstanding callback rather than just clearing the flag — leaving it
+        // posted is the other half of how retries used to stack up.
+        mainHandler.removeCallbacks(drainRetry)
+        drainPolicy.reset()
     }
 
     private val serviceListener = object : BluetoothProfile.ServiceListener {
@@ -497,8 +510,6 @@ class HidGamepadManager(private val context: Context, private val listener: List
          */
         const val RETRY_DELAY_MS = 8L
 
-        /** TV-menu keystrokes are slow by nature; a deep backlog would only be stale. */
-        const val KEY_QUEUE_CAPACITY = 8
 
         /**
          * Whether to ask for a custom L2CAP flow spec instead of the stack default.

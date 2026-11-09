@@ -105,7 +105,7 @@ object UpdateNotice {
         return UpdateVersion.isNewer(found.versionCode, installedVersionCode)
     }
 
-    /** What an [UpdateState] should leave in storage: the update, or nothing. */
+    /** What an [UpdateState] describes, on its own, with no regard for what came before. */
     fun remember(state: UpdateState): Remembered? = when (state) {
         is UpdateState.Available -> Remembered(
             versionCode = state.update.versionCode,
@@ -113,5 +113,36 @@ object UpdateNotice {
             apkBytes = state.update.apkBytes,
         )
         else -> null
+    }
+
+    /**
+     * What storage should hold after a check, given what it held before.
+     *
+     * The distinction [remember] does not make, and the one that matters: a check that did not
+     * happen is not the same as a check that found nothing.
+     *
+     *  - **Available** — remember it.
+     *  - **Up to date** — a successful check proved the app is current, so forget what was
+     *    remembered. Without this a strip for an already-installed version would reappear.
+     *  - **Failed, or still running** — nothing was learned. Keep what was there. Losing a
+     *    verified, still-newer update because the phone was briefly offline is exactly the
+     *    failure this prevents; the user would then see nothing until the next successful
+     *    check, with no way to tell why.
+     *
+     * In every case a remembered update that is no longer newer than [installedVersionCode] is
+     * dropped — the user may have installed it by hand since.
+     */
+    fun cacheAfter(
+        state: UpdateState,
+        existing: Remembered?,
+        installedVersionCode: Int,
+    ): Remembered? {
+        val next = when (state) {
+            is UpdateState.Available -> remember(state)
+            UpdateState.UpToDate -> null
+            else -> existing
+        }
+        if (next == null) return null
+        return if (UpdateVersion.isNewer(next.versionCode, installedVersionCode)) next else null
     }
 }

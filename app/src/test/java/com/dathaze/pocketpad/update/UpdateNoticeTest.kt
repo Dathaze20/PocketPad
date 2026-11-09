@@ -171,12 +171,103 @@ class UpdateNoticeTest {
         assertNull(UpdateNotice.remember(UpdateState.UpToDate))
     }
 
+    /**
+     * This test used to assert the two helpers agreed and then *claim in a comment* that the
+     * caller only wrote the cache after a settled answer. It did not — `onCheckFinished` wrote
+     * `remember(state)` unconditionally, so a failed request erased a verified update. The
+     * comment described an invariant nothing enforced, which is worse than no test, because it
+     * read as coverage. [UpdateNotice.cacheAfter] is now that invariant, and the tests below
+     * exercise it instead of describing it.
+     */
     @Test
-    fun aFailedCheckDoesNotOverwriteWhatWasRemembered() {
-        // remember() returns null, but the caller only writes it after a settled answer, so a
-        // failure leaves the cache alone. Pinned here because the two rules have to agree.
+    fun rememberAloneCannotDistinguishFailureFromBeingUpToDate() {
         assertNull(UpdateNotice.remember(UpdateState.Failed("offline")))
+        assertNull(UpdateNotice.remember(UpdateState.UpToDate))
         assertFalse(UpdateNotice.isSettled(UpdateState.Failed("offline")))
+    }
+
+    // ------------------------------------------- what storage keeps after a check
+
+    /** The regression: being briefly offline must not lose a verified, still-newer update. */
+    @Test
+    fun aFailedCheckKeepsTheRememberedUpdate() {
+        val cached = found(code = 20)
+        val kept = UpdateNotice.cacheAfter(
+            state = UpdateState.Failed("no connection"),
+            existing = cached,
+            installedVersionCode = 19,
+        )
+        assertEquals("the update must survive a failed request", cached, kept)
+    }
+
+    @Test
+    fun everyKindOfFailureKeepsIt() {
+        val cached = found(code = 20)
+        listOf(
+            UpdateState.Failed("no connection"),
+            UpdateState.Failed("GitHub sent a release this app could not read."),
+            UpdateState.Failed("That release has no installable APK attached."),
+            UpdateState.Idle,
+            UpdateState.Checking,
+        ).forEach {
+            assertEquals("$it must not clear the cache", cached, UpdateNotice.cacheAfter(it, cached, 19))
+        }
+    }
+
+    @Test
+    fun repeatedFailuresNeverWearTheCacheAway() {
+        var cache: UpdateNotice.Remembered? = found(code = 20)
+        repeat(50) {
+            cache = UpdateNotice.cacheAfter(UpdateState.Failed("offline"), cache, 19)
+        }
+        assertEquals(20, cache?.versionCode)
+    }
+
+    /** The one case that should clear it: a check that succeeded and found nothing newer. */
+    @Test
+    fun aSuccessfulUpToDateCheckClearsIt() {
+        assertNull(UpdateNotice.cacheAfter(UpdateState.UpToDate, found(code = 20), 19))
+    }
+
+    @Test
+    fun aNewerFindReplacesAnOlderOne() {
+        val updated = UpdateNotice.cacheAfter(available(code = 21, name = "2.7.0"), found(code = 20), 19)
+        assertEquals(21, updated?.versionCode)
+        assertEquals("2.7.0", updated?.versionName)
+    }
+
+    /** The other clearing case: the user installed it by hand since it was remembered. */
+    @Test
+    fun aRememberedUpdateThatIsNoLongerNewerIsDropped() {
+        assertNull(
+            "installed in the meantime",
+            UpdateNotice.cacheAfter(UpdateState.Failed("offline"), found(code = 20), 20)
+        )
+        assertNull(
+            "and an older one too",
+            UpdateNotice.cacheAfter(UpdateState.Failed("offline"), found(code = 18), 19)
+        )
+    }
+
+    @Test
+    fun anEmptyCacheStaysEmptyThroughAFailure() {
+        assertNull(UpdateNotice.cacheAfter(UpdateState.Failed("offline"), null, 19))
+    }
+
+    /**
+     * End to end: find an update, go offline for a week of launches, and the strip must still
+     * be offered the whole time.
+     */
+    @Test
+    fun anUpdateFoundBeforeGoingOfflineIsStillOfferedAfterwards() {
+        var cache = UpdateNotice.cacheAfter(available(code = 20), null, 19)
+        repeat(7) { cache = UpdateNotice.cacheAfter(UpdateState.Failed(""), cache, 19) }
+
+        assertTrue(
+            "still offered",
+            UpdateNotice.shouldShowBanner(cache, 19, 0, 0L, now)
+        )
+        assertTrue("and still marked in settings", UpdateNotice.shouldMarkSettings(cache, 19))
     }
 
     @Test

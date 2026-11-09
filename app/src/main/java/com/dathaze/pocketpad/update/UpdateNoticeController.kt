@@ -115,8 +115,17 @@ class UpdateNoticeController(
             prefs.edit().putLong(KEY_CHECKED_AT, System.currentTimeMillis()).apply()
         }
 
+        // A live offer only exists when this check produced one; a cached find has no URL that
+        // should be acted on later, which is what the Update Now fallback is for.
         offer = (state as? UpdateState.Available)?.update
-        found = UpdateNotice.remember(state)
+
+        // Not remember(): a failed request must not erase a verified update. See
+        // UpdateNotice.cacheAfter for the three cases.
+        found = UpdateNotice.cacheAfter(
+            state = state,
+            existing = found ?: readRemembered(),
+            installedVersionCode = updater.installedVersionCode,
+        )
         writeRemembered(found)
         renderBanner()
     }
