@@ -79,4 +79,28 @@
     <string name="status_profile_unavailable">Couldn\'t reach Bluetooth. Turn Bluetooth off and on, then reopen PocketPad.</string>
     <string name="bt_advertise_needed">PocketPad also needs the \"Nearby devices\" permission to make your phone discoverable. Without it the controller still works with devices you already paired, but no new device can find it.</string>
     <string name="help_windows">PC (Windows 10/11) and tablets:\n\n1. In PocketPad: tap \u201cMake phone discoverable\u201d.\n2. On the PC: Settings \u2192 Bluetooth &amp; devices \u2192 Add device \u2192 Bluetooth, pick your phone, and confirm the code on both screens.\n3. Back in PocketPad: Settings \u2192 \u201cConnect to a paired device\u201d \u2192 pick the PC.\n\nStep 3 is not optional. A PC that pairs with a phone files it away as a phone and never goes looking for a controller on it, so the phone has to open the controller connection itself. If the PC refuses, PocketPad now says so instead of sitting on \u201cconnecting\u201d.</string>
+
+    <!-- Settings sheet -->
+    <string name="sheet_logo_glyph" translatable="false">P</string>
+    <string name="sheet_chevron" translatable="false">\u203A</string>
+    <string name="sheet_status_connected">Connected \u00B7 %1$s</string>
+    <string name="sheet_status_disconnected">Not connected</string>
+    <string name="sheet_group_connection">Connection</string>
+    <string name="sheet_group_controller">Controller</string>
+    <string name="sheet_group_appearance">Appearance</string>
+    <string name="sheet_group_system">System</string>
+    <string name="sheet_sub_connect">Open the link from this phone</string>
+    <string name="sheet_sub_discoverable">So a TV or PC can pair with it</string>
+    <string name="sheet_tv_menu_keys">TV menu keys</string>
+    <string name="sheet_sub_tv_menu_keys">For browsing menus, not for games</string>
+    <string name="sheet_badge_update">NEW</string>
+    <!-- Short style names: the full ones ("PlayStation (PS4 / PS5)") do not fit on a row. -->
+    <string name="sheet_style_ps">PlayStation</string>
+    <string name="sheet_style_xbox">Xbox</string>
+    <string name="sheet_style_snes">SNES</string>
+    <string name="sheet_style_nes">NES</string>
+    <string name="sheet_style_gameboy">Game Boy</string>
+    <string name="sheet_vibration_off">Off</string>
+    <string name="sheet_vibration_light">Light</string>
+    <string name="sheet_vibration_strong">Strong</string>
 </resources>

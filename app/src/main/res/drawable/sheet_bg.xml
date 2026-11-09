@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The sheet itself: rounded only at the top, so it reads as rising from the bottom edge. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="@color/pp_surface" />
+    <corners android:topLeftRadius="20dp" android:topRightRadius="20dp" />
+    <stroke android:width="1dp" android:color="@color/pp_outline" />
+</shape>

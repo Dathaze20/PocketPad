@@ -39,6 +39,7 @@ import com.dathaze.pocketpad.hid.HidGamepadManager
 import com.dathaze.pocketpad.ui.BackgroundImage
 import com.dathaze.pocketpad.ui.ControllerView
 import com.dathaze.pocketpad.ui.Haptics
+import com.dathaze.pocketpad.ui.SettingsSheet
 import com.dathaze.pocketpad.update.UpdateFlow
 import com.dathaze.pocketpad.usb.Ds3UsbDriver
 import kotlin.math.roundToInt
@@ -321,42 +322,71 @@ class MainActivity : AppCompatActivity(),
         tvNavigation = prefs.getBoolean(PREF_TV_NAV, false)
     }
 
+    /**
+     * Opens the settings sheet.
+     *
+     * Every action the old list dialog offered is still here and still does the same thing;
+     * what changed is that the sheet shows the live connection, the current controller style
+     * and vibration level, and TV menu keys as a switch. See [SettingsSheet].
+     */
     @SuppressLint("MissingPermission")
     override fun onOpenSettings() {
-        val items = arrayOf(
-            getString(R.string.action_connect_paired),
-            getString(R.string.action_discoverable),
-            getString(R.string.action_skin),
-            getString(R.string.action_edit_layout),
-            getString(R.string.action_background),
-            getString(R.string.action_haptics),
-            getString(
-                if (tvNavigation) R.string.action_tv_nav_on else R.string.action_tv_nav_off
-            ),
-            getString(R.string.action_bt_settings),
-            getString(R.string.action_disconnect),
-            getString(R.string.action_check_updates),
-            getString(R.string.action_help)
-        )
-        AlertDialog.Builder(this)
-            .setTitle(R.string.settings_title)
-            .setItems(items) { _, which ->
-                when (which) {
-                    0 -> showPairedDevicePicker()
-                    1 -> makeDiscoverable()
-                    2 -> showSkinPicker()
-                    3 -> startLayoutEdit()
-                    4 -> showBackgroundMenu()
-                    5 -> showHapticsPicker()
-                    6 -> toggleTvNavigation()
-                    7 -> startActivity(Intent(android.provider.Settings.ACTION_BLUETOOTH_SETTINGS))
-                    8 -> hidManager.disconnect()
-                    9 -> checkForUpdates()
-                    10 -> showHelp()
-                }
+        settingsSheet.show(settingsHost)
+    }
+
+    private val settingsSheet by lazy { SettingsSheet(this) }
+
+    private val settingsHost = object : SettingsSheet.Host {
+        /**
+         * Only ever the device the HID profile reports as connected right now.
+         *
+         * Deliberately not derived from the bonded-device list: a remembered pairing is not a
+         * connection, and showing "Connected" for one would make the sheet lie about the single
+         * thing it is most useful for.
+         */
+        override fun connectedDeviceName(): String? {
+            if (!::hidManager.isInitialized || !hidManager.isConnected) return null
+            val device = hidManager.currentDevice ?: return null
+            return try {
+                device.name ?: device.address
+            } catch (_: SecurityException) {
+                getString(R.string.sheet_status_disconnected)
             }
-            .setNegativeButton(android.R.string.cancel, null)
-            .show()
+        }
+
+        override fun controllerStyleLabel(): String = when (controllerView.skin) {
+            ControllerView.Skin.PS -> getString(R.string.sheet_style_ps)
+            ControllerView.Skin.XBOX -> getString(R.string.sheet_style_xbox)
+            ControllerView.Skin.SNES -> getString(R.string.sheet_style_snes)
+            ControllerView.Skin.NES -> getString(R.string.sheet_style_nes)
+            ControllerView.Skin.GAMEBOY -> getString(R.string.sheet_style_gameboy)
+        }
+
+        override fun vibrationLabel(): String = getString(
+            when (controllerView.haptics.level) {
+                Haptics.Level.OFF -> R.string.sheet_vibration_off
+                Haptics.Level.LIGHT -> R.string.sheet_vibration_light
+                Haptics.Level.STRONG -> R.string.sheet_vibration_strong
+            }
+        )
+
+        override fun tvMenuKeysOn(): Boolean = tvNavigation
+
+        override fun pendingUpdateLabel(): String? = null
+
+        override fun onConnectToPaired() = showPairedDevicePicker()
+        override fun onMakeDiscoverable() = makeDiscoverable()
+        override fun onDisconnect() = hidManager.disconnect()
+        override fun onChooseStyle() = showSkinPicker()
+        override fun onMoveButtons() = startLayoutEdit()
+        override fun onChooseVibration() = showHapticsPicker()
+        override fun onToggleTvMenuKeys() = toggleTvNavigation()
+        override fun onBackgroundPicture() = showBackgroundMenu()
+        override fun onCheckForUpdates() = checkForUpdates()
+        override fun onBluetoothSettings() {
+            startActivity(Intent(android.provider.Settings.ACTION_BLUETOOTH_SETTINGS))
+        }
+        override fun onHelp() = showHelp()
     }
 
     /**

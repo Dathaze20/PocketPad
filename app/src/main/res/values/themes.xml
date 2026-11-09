@@ -7,4 +7,23 @@
         <item name="colorAccent">@color/pp_accent</item>
         <item name="android:colorBackground">@color/pp_background</item>
     </style>
+
+    <!--
+      The settings sheet. A plain dialog anchored to the bottom rather than a Material
+      BottomSheetDialog: Material Components is not a dependency of this project and pulling it
+      in for one surface is not worth it.
+    -->
+    <style name="Theme.PocketPad.Sheet" parent="Theme.AppCompat.Dialog">
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowIsFloating">false</item>
+        <item name="android:windowContentOverlay">@null</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:backgroundDimEnabled">true</item>
+        <item name="colorAccent">@color/pp_accent</item>
+    </style>
+
+    <style name="Animation.PocketPad.Sheet" parent="@android:style/Animation.Dialog">
+        <item name="android:windowEnterAnimation">@anim/sheet_enter</item>
+        <item name="android:windowExitAnimation">@anim/sheet_exit</item>
+    </style>
 </resources>
