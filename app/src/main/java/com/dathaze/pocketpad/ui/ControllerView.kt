@@ -1269,13 +1269,23 @@ class ControllerView @JvmOverloads constructor(
             }
 
             MotionEvent.ACTION_MOVE -> {
+                // One move event can carry new positions for several fingers at once. Each
+                // control used to announce its own change, so two thumbs on two sticks produced
+                // two reports per frame, the first already obsolete by the time it was sent.
+                //
+                // Batching is safe *here specifically*: a move event never contains a press or
+                // a release, so everything folded together genuinely happened at the same
+                // instant. Down and up are deliberately left unbatched — collapsing a press
+                // into its release is exactly how a tap would go missing.
                 var moved = false
+                beginBatch()
                 for (i in 0 until event.pointerCount) {
                     val id = event.getPointerId(i)
                     val control = activeControls.firstOrNull { it.pointerId == id } ?: continue
                     control.onMove(event.getX(i), event.getY(i))
                     moved = true
                 }
+                endBatch()
                 if (moved) invalidate()
             }
 
@@ -1381,7 +1391,32 @@ class ControllerView @JvmOverloads constructor(
         if (!hasWindowFocus) releaseAllPointers()
     }
 
+    /**
+     * While a batch is open, controls record that something changed instead of announcing it,
+     * and one announcement goes out when the batch closes. Only [onTouchEvent]'s move branch
+     * opens one; see the comment there for why that is the only safe place.
+     */
+    private var batching = false
+    private var batchDirty = false
+
+    private fun beginBatch() {
+        batching = true
+        batchDirty = false
+    }
+
+    private fun endBatch() {
+        batching = false
+        if (batchDirty) {
+            batchDirty = false
+            listener?.onTouchStateChanged()
+        }
+    }
+
     private fun notifyChanged() {
+        if (batching) {
+            batchDirty = true
+            return
+        }
         listener?.onTouchStateChanged()
     }
 }
