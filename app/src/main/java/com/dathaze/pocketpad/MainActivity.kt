@@ -330,6 +330,7 @@ class MainActivity : AppCompatActivity(),
             "SNES" -> ControllerView.Skin.SNES
             "NES" -> ControllerView.Skin.NES
             "GAMEBOY" -> ControllerView.Skin.GAMEBOY
+            "TOUCH" -> ControllerView.Skin.TOUCH
             else -> ControllerView.Skin.PS
         }
         controllerView.haptics.level = when (prefs.getString(PREF_HAPTICS, "STRONG")) {
@@ -378,6 +379,7 @@ class MainActivity : AppCompatActivity(),
             ControllerView.Skin.SNES -> getString(R.string.sheet_style_snes)
             ControllerView.Skin.NES -> getString(R.string.sheet_style_nes)
             ControllerView.Skin.GAMEBOY -> getString(R.string.sheet_style_gameboy)
+            ControllerView.Skin.TOUCH -> getString(R.string.sheet_style_touch)
         }
 
         override fun vibrationLabel(): String = getString(
@@ -607,7 +609,8 @@ class MainActivity : AppCompatActivity(),
             getString(R.string.skin_xbox),
             getString(R.string.skin_snes),
             getString(R.string.skin_nes),
-            getString(R.string.skin_gameboy)
+            getString(R.string.skin_gameboy),
+            getString(R.string.skin_touch)
         )
         val current = when (controllerView.skin) {
             ControllerView.Skin.PS -> 0
@@ -615,6 +618,7 @@ class MainActivity : AppCompatActivity(),
             ControllerView.Skin.SNES -> 2
             ControllerView.Skin.NES -> 3
             ControllerView.Skin.GAMEBOY -> 4
+            ControllerView.Skin.TOUCH -> 5
         }
         AlertDialog.Builder(this)
             .setTitle(R.string.action_skin)
@@ -624,6 +628,7 @@ class MainActivity : AppCompatActivity(),
                     2 -> ControllerView.Skin.SNES to "SNES"
                     3 -> ControllerView.Skin.NES to "NES"
                     4 -> ControllerView.Skin.GAMEBOY to "GAMEBOY"
+                    5 -> ControllerView.Skin.TOUCH to "TOUCH"
                     else -> ControllerView.Skin.PS to "PS"
                 }
                 controllerView.skin = skin
@@ -736,7 +741,9 @@ class MainActivity : AppCompatActivity(),
             // phone-has-to-connect-outwards step is the one people miss, and it reads better
             // as its own block than buried in the TV instructions.
             .setMessage(
-                getString(R.string.help_text) + "\n\n" + getString(R.string.help_windows)
+                getString(R.string.help_text) + "\n\n" +
+                    getString(R.string.help_windows) + "\n\n" +
+                    getString(R.string.help_touch)
             )
             .setPositiveButton(android.R.string.ok, null)
             .show()

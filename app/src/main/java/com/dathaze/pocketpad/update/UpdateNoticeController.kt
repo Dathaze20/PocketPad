@@ -136,8 +136,9 @@ class UpdateNoticeController(
             removeBanner()
             return
         }
-        if (banner != null) {
-            bind(banner!!, remembered)
+        val existing = banner
+        if (existing != null) {
+            bind(existing, remembered)
             return
         }
         val root = activity.findViewById<ViewGroup>(android.R.id.content) ?: return

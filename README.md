@@ -103,6 +103,34 @@ Five styles, switchable from the ⚙ menu. Every style drives the **same** HID r
 | **Super Nintendo** | X / A / B / Y in SNES colours, L / R, SELECT / START |
 | **NES** | B / A, SELECT / START |
 | **Game Boy** | B / A on the diagonal, SELECT / START |
+| **Touch shooter** | A phone-style layout: floating movement stick, drag-to-look camera area, and buttons named by what they do (FIRE, AIM, JUMP, BUILD) rather than by a pad's letters. [What it can and cannot do](#touch-shooter-style) |
+
+### Touch shooter style
+
+For anyone who learned to play on a phone rather than on a pad. The movement stick appears
+wherever your left thumb lands and follows it across the screen; everything not under a button
+is a camera area, so your right thumb looks around by dragging. Buttons are placed and sized
+with **Move buttons** like any other style, and saved separately from the rest.
+
+It sends ordinary gamepad buttons, so set the game's own controller bindings to match: FIRE is
+the right trigger, AIM the left trigger, JUMP the bottom face button, CROUCH the right face
+button, USE the left face button, SWAP the top face button, SPRINT the left stick click, BUILD
+the left shoulder, EDIT the right shoulder, and the four quick slots are the d-pad directions.
+
+**Two limits worth knowing before you try it.**
+
+*Dragging to look is not the same as it is on a phone, and cannot be.* A drag is a
+displacement — it tells the game how far to turn, so the same swipe always turns you the same
+amount. A gamepad stick is a rate — it only says how fast to keep turning. There is no gamepad
+input meaning "rotate this much, now", so PocketPad turns how fast your finger moves into how
+far the stick is pushed. That plays well and it is not identical; small precise aiming in
+particular feels softer. This is a property of the Bluetooth HID gamepad protocol, not
+something a future version fixes.
+
+*PocketPad cannot see the game.* Nothing comes back from the TV or the PC, so it has no way to
+know what you are standing over, what is in each slot, how much ammo is left, or whether you
+are in build mode. Buttons that a phone shows only when they are useful are always on screen
+here, and the quick slots are numbered rather than showing your actual items.
 
 ### Customisation
 

@@ -54,7 +54,17 @@ class ControllerStyleMappingTest {
     /** Controls that carry no label and send no button of their own. */
     private val unlabelled = setOf("dpad", "leftStick", "rightStick", "gear")
 
-    private val allStyles = listOf("PS", "XBOX", "SNES", "NES", "GAMEBOY")
+    /**
+     * The touch style. It is checked separately from the five pad styles throughout this file,
+     * because the assumptions that hold for a gamepad do not hold for it: it has no d-pad and
+     * no home button, its controls carry fixed function names set at construction rather than
+     * labels swapped per style, and it adds a camera surface no pad has. Keeping it out of the
+     * pad assertions is what stops it weakening them.
+     */
+    private val touchStyle = "TOUCH"
+
+    private val padStyles = listOf("PS", "XBOX", "SNES", "NES", "GAMEBOY")
+    private val allStyles = padStyles + touchStyle
 
     @Before
     fun parseControllerViewSource() {
@@ -128,11 +138,20 @@ class ControllerStyleMappingTest {
     // ------------------------------------------------------------ structure
 
     @Test
-    fun allFiveStylesAreDefined() {
+    fun everyStyleIsDefined() {
         assertEquals(
-            "applySkin must handle exactly the five supported styles",
+            "applySkin must handle exactly the supported styles",
             allStyles.toSet(), styleLabels.keys
         )
+    }
+
+    /** The five pad styles must keep existing, whatever is added alongside them. */
+    @Test
+    fun theFiveOriginalPadStylesAreAllStillPresent() {
+        padStyles.forEach {
+            assertTrue("$it is gone from applySkin", styleLabels.containsKey(it))
+            assertTrue("$it shows no controls", styleActive[it]?.isNotEmpty() == true)
+        }
     }
 
     @Test
@@ -186,7 +205,7 @@ class ControllerStyleMappingTest {
      */
     @Test
     fun everyVisibleButtonIsLabelledByItsOwnStyle() {
-        styleActive.forEach { (style, controls) ->
+        styleActive.filterKeys { it != touchStyle }.forEach { (style, controls) ->
             val labels = styleLabels[style]!!
             controls.filter { it !in unlabelled }.forEach { control ->
                 assertTrue(
@@ -198,11 +217,61 @@ class ControllerStyleMappingTest {
     }
 
     @Test
-    fun everyStyleShowsADpadHomeButtonAndSettingsGear() {
-        styleActive.forEach { (style, controls) ->
+    fun everyPadStyleShowsADpadHomeButtonAndSettingsGear() {
+        styleActive.filterKeys { it != touchStyle }.forEach { (style, controls) ->
             assertTrue("$style has no d-pad", controls.contains("dpad"))
             assertTrue("$style has no home button", controls.contains("btnHome"))
             assertTrue("$style has no settings gear", controls.contains("gear"))
+        }
+    }
+
+    /**
+     * The touch style's own shape: a floating movement stick, a camera surface, and the gear
+     * so settings stay reachable. It deliberately has no d-pad — the four quick slots drive
+     * the hat instead — and no home button.
+     */
+    @Test
+    fun theTouchStyleHasItsMovementStickCameraAndGear() {
+        val controls = styleActive[touchStyle] ?: error("touch style not parsed")
+        assertTrue("no movement stick", controls.contains("moveStick"))
+        assertTrue("no camera surface", controls.contains("cameraSurface"))
+        assertTrue("no settings gear", controls.contains("gear"))
+        assertTrue("fire is the point of it", controls.contains("touchFire"))
+    }
+
+    /** The camera takes leftovers, so it must be offered the touch last. */
+    @Test
+    fun theCameraSurfaceIsListedAfterEveryTouchButton() {
+        val controls = styleActive[touchStyle] ?: error("touch style not parsed")
+        assertEquals(
+            "the camera surface must come last in the touch style's control list",
+            controls.size - 1, controls.indexOf("cameraSurface")
+        )
+    }
+
+    /** Nothing from the touch style may leak into a pad style's control list. */
+    @Test
+    fun touchControlsNeverAppearInAPadStyle() {
+        val touchOnly = listOf(
+            "moveStick", "cameraSurface", "touchFire", "touchAim", "touchJump",
+            "touchCrouch", "touchUse", "touchSwap", "touchSprint", "touchBuild",
+            "touchEdit", "touchMenu", "touchMark", "slot1", "slot2", "slot3", "slot4",
+        )
+        styleActive.filterKeys { it != touchStyle }.forEach { (style, controls) ->
+            touchOnly.forEach {
+                assertTrue("$style must not show the touch style's $it", it !in controls)
+            }
+        }
+    }
+
+    /** And no pad control may leak into the touch style. */
+    @Test
+    fun padControlsNeverAppearInTheTouchStyle() {
+        val controls = styleActive[touchStyle] ?: error("touch style not parsed")
+        listOf("dpad", "leftStick", "rightStick", "faceTop", "faceRight", "faceBottom",
+            "faceLeft", "btnL1", "btnL2", "btnR1", "btnR2", "btnL3", "btnR3",
+            "btnShare", "btnOptions", "btnHome").forEach {
+            assertTrue("the touch style must not reuse the pad control $it", it !in controls)
         }
     }
 

@@ -21,6 +21,7 @@
     <string name="skin_snes">Super Nintendo</string>
     <string name="skin_nes">NES</string>
     <string name="skin_gameboy">Game Boy</string>
+    <string name="skin_touch">Touch shooter (phone-style)</string>
     <string name="haptics_strong">Strong (feels like real buttons)</string>
     <string name="haptics_light">Light</string>
     <string name="haptics_off">Off</string>
@@ -78,6 +79,7 @@
     <string name="status_connect_refused">%1$s turned the controller connection down. Pair the phone from that device\'s Bluetooth settings first, then try again.</string>
     <string name="status_profile_unavailable">Couldn\'t reach Bluetooth. Turn Bluetooth off and on, then reopen PocketPad.</string>
     <string name="bt_advertise_needed">PocketPad also needs the \"Nearby devices\" permission to make your phone discoverable. Without it the controller still works with devices you already paired, but no new device can find it.</string>
+    <string name="help_touch">Touch shooter style:\n\nA phone-style layout for games played on a TV or PC \u2014 a movement stick that appears wherever your left thumb lands, and a camera area covering everything not under a button, so your right thumb can look around by dragging.\n\nThe buttons are named by what they do (FIRE, AIM, JUMP, BUILD) rather than by a pad\u2019s letters, but they send ordinary gamepad buttons. Set the game\u2019s own controller bindings to match: FIRE is the right trigger, AIM the left trigger, JUMP the bottom face button, CROUCH the right face button, USE the left face button, SWAP the top face button, SPRINT the left stick click, BUILD the left shoulder, EDIT the right shoulder, and the four quick slots are the d-pad directions.\n\nTwo honest limits:\n\nDragging to look is NOT the same as it is on a phone. A drag tells a phone game how far to turn; a gamepad stick can only say how fast to keep turning. PocketPad turns how quickly your finger moves into how far the stick is pushed, which plays well but feels softer for small, precise aiming. No Bluetooth gamepad can do better than this.\n\nPocketPad cannot see the game. There is no connection back from the TV or PC, so it has no way to know what you are standing over, what is in each slot, how much ammo is left, or whether you are building. Buttons that appear only when they are useful on a phone are always on screen here, and the slots are numbered rather than showing your actual items.\n\nMove buttons works in this style too, and its layout is saved separately from the other styles.</string>
     <string name="help_windows">PC (Windows 10/11) and tablets:\n\n1. In PocketPad: tap \u201cMake phone discoverable\u201d.\n2. On the PC: Settings \u2192 Bluetooth &amp; devices \u2192 Add device \u2192 Bluetooth, pick your phone, and confirm the code on both screens.\n3. Back in PocketPad: Settings \u2192 \u201cConnect to a paired device\u201d \u2192 pick the PC.\n\nStep 3 is not optional. A PC that pairs with a phone files it away as a phone and never goes looking for a controller on it, so the phone has to open the controller connection itself. If the PC refuses, PocketPad now says so instead of sitting on \u201cconnecting\u201d.</string>
 
     <!-- Settings sheet -->
@@ -100,6 +102,7 @@
     <string name="sheet_style_snes">SNES</string>
     <string name="sheet_style_nes">NES</string>
     <string name="sheet_style_gameboy">Game Boy</string>
+    <string name="sheet_style_touch">Touch shooter</string>
     <string name="sheet_vibration_off">Off</string>
     <string name="sheet_vibration_light">Light</string>
     <string name="sheet_vibration_strong">Strong</string>
