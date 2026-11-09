@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Teal action button, #00a89e, 8dp corners — the same one My Music uses. -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:state_pressed="true"><shape android:shape="rectangle">
+        <solid android:color="@color/pp_teal_pressed" /><corners android:radius="8dp" />
+    </shape></item>
+    <item><shape android:shape="rectangle">
+        <solid android:color="@color/pp_teal" /><corners android:radius="8dp" />
+    </shape></item>
+</selector>

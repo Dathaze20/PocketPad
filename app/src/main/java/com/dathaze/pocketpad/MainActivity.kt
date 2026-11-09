@@ -39,7 +39,10 @@ import com.dathaze.pocketpad.hid.HidGamepadManager
 import com.dathaze.pocketpad.ui.BackgroundImage
 import com.dathaze.pocketpad.ui.ControllerView
 import com.dathaze.pocketpad.ui.Haptics
+import com.dathaze.pocketpad.ui.SettingsSheet
+import com.dathaze.pocketpad.update.AppUpdater
 import com.dathaze.pocketpad.update.UpdateFlow
+import com.dathaze.pocketpad.update.UpdateNoticeController
 import com.dathaze.pocketpad.usb.Ds3UsbDriver
 import kotlin.math.roundToInt
 
@@ -61,6 +64,14 @@ class MainActivity : AppCompatActivity(),
      * that never opens that menu never constructs it and never makes a request.
      */
     private var updateFlow: UpdateFlow? = null
+
+    /**
+     * The quiet once-a-day update check and its strip. Created lazily so nothing happens
+     * unless [onCreate] schedules it.
+     */
+    private val updateNotice by lazy {
+        UpdateNoticeController(this, AppUpdater(this)) { openUpdateFlow() }
+    }
 
     /**
      * When on, the pad ALSO sends keyboard keys so it can drive TV menus.
@@ -92,9 +103,21 @@ class MainActivity : AppCompatActivity(),
             if (controllerView.isPanningBackground) {
                 saveBackgroundPan()
             } else {
+                val overlaps = controllerView.overlappingControlCount()
                 controllerView.saveEditedLayout()
                 finishLayoutEdit()
-                Toast.makeText(this, R.string.edit_saved, Toast.LENGTH_SHORT).show()
+                // Overlapping controls are still reachable — the nearest one wins — but one of
+                // each pair is harder to hit than it looks, and silently saving a layout with a
+                // button hidden under a stick is how a control ends up feeling broken.
+                Toast.makeText(
+                    this,
+                    if (overlaps > 0) {
+                        resources.getQuantityString(R.plurals.edit_saved_overlap, overlaps, overlaps)
+                    } else {
+                        getString(R.string.edit_saved)
+                    },
+                    if (overlaps > 0) Toast.LENGTH_LONG else Toast.LENGTH_SHORT
+                ).show()
             }
         }
         findViewById<android.widget.Button>(R.id.editReset).setOnClickListener {
@@ -141,6 +164,10 @@ class MainActivity : AppCompatActivity(),
 
         handleUsbIntent(intent)
         ds3Driver.findAttachedDs3()?.let { ds3Driver.openOrRequestPermission(it) }
+
+        // Quietly asks GitHub a few seconds from now whether anything newer is published, at
+        // most once a day, and says nothing unless there is. Never downloads on its own.
+        updateNotice.scheduleAutomaticCheck()
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -158,6 +185,9 @@ class MainActivity : AppCompatActivity(),
         // waiting on that permission back in front of the user. Null unless they opened the
         // updater, so this costs nothing for everyone else.
         updateFlow?.onActivityResumed()
+        // A version dismissed earlier stays dismissed; this only re-evaluates, it does not
+        // re-show what was already waved away.
+        updateNotice.refresh()
     }
 
     /**
@@ -198,6 +228,7 @@ class MainActivity : AppCompatActivity(),
         // Guarded so a failure during onCreate can't turn into a second crash.
         (getSystemService(INPUT_SERVICE) as? InputManager)
             ?.unregisterInputDeviceListener(inputDeviceListener)
+        updateNotice.dispose()
         if (::ds3Driver.isInitialized) ds3Driver.release()
         if (::hidManager.isInitialized) hidManager.stop()
         // Guarded for the same reason as the two above: setContentView or findViewById failing
@@ -299,6 +330,7 @@ class MainActivity : AppCompatActivity(),
             "SNES" -> ControllerView.Skin.SNES
             "NES" -> ControllerView.Skin.NES
             "GAMEBOY" -> ControllerView.Skin.GAMEBOY
+            "TOUCH" -> ControllerView.Skin.TOUCH
             else -> ControllerView.Skin.PS
         }
         controllerView.haptics.level = when (prefs.getString(PREF_HAPTICS, "STRONG")) {
@@ -309,42 +341,72 @@ class MainActivity : AppCompatActivity(),
         tvNavigation = prefs.getBoolean(PREF_TV_NAV, false)
     }
 
+    /**
+     * Opens the settings sheet.
+     *
+     * Every action the old list dialog offered is still here and still does the same thing;
+     * what changed is that the sheet shows the live connection, the current controller style
+     * and vibration level, and TV menu keys as a switch. See [SettingsSheet].
+     */
     @SuppressLint("MissingPermission")
     override fun onOpenSettings() {
-        val items = arrayOf(
-            getString(R.string.action_connect_paired),
-            getString(R.string.action_discoverable),
-            getString(R.string.action_skin),
-            getString(R.string.action_edit_layout),
-            getString(R.string.action_background),
-            getString(R.string.action_haptics),
-            getString(
-                if (tvNavigation) R.string.action_tv_nav_on else R.string.action_tv_nav_off
-            ),
-            getString(R.string.action_bt_settings),
-            getString(R.string.action_disconnect),
-            getString(R.string.action_check_updates),
-            getString(R.string.action_help)
-        )
-        AlertDialog.Builder(this)
-            .setTitle(R.string.settings_title)
-            .setItems(items) { _, which ->
-                when (which) {
-                    0 -> showPairedDevicePicker()
-                    1 -> makeDiscoverable()
-                    2 -> showSkinPicker()
-                    3 -> startLayoutEdit()
-                    4 -> showBackgroundMenu()
-                    5 -> showHapticsPicker()
-                    6 -> toggleTvNavigation()
-                    7 -> startActivity(Intent(android.provider.Settings.ACTION_BLUETOOTH_SETTINGS))
-                    8 -> hidManager.disconnect()
-                    9 -> checkForUpdates()
-                    10 -> showHelp()
-                }
+        settingsSheet.show(settingsHost)
+    }
+
+    private val settingsSheet by lazy { SettingsSheet(this) }
+
+    private val settingsHost = object : SettingsSheet.Host {
+        /**
+         * Only ever the device the HID profile reports as connected right now.
+         *
+         * Deliberately not derived from the bonded-device list: a remembered pairing is not a
+         * connection, and showing "Connected" for one would make the sheet lie about the single
+         * thing it is most useful for.
+         */
+        override fun connectedDeviceName(): String? {
+            if (!::hidManager.isInitialized || !hidManager.isConnected) return null
+            val device = hidManager.currentDevice ?: return null
+            return try {
+                device.name ?: device.address
+            } catch (_: SecurityException) {
+                getString(R.string.sheet_status_disconnected)
             }
-            .setNegativeButton(android.R.string.cancel, null)
-            .show()
+        }
+
+        override fun controllerStyleLabel(): String = when (controllerView.skin) {
+            ControllerView.Skin.PS -> getString(R.string.sheet_style_ps)
+            ControllerView.Skin.XBOX -> getString(R.string.sheet_style_xbox)
+            ControllerView.Skin.SNES -> getString(R.string.sheet_style_snes)
+            ControllerView.Skin.NES -> getString(R.string.sheet_style_nes)
+            ControllerView.Skin.GAMEBOY -> getString(R.string.sheet_style_gameboy)
+            ControllerView.Skin.TOUCH -> getString(R.string.sheet_style_touch)
+        }
+
+        override fun vibrationLabel(): String = getString(
+            when (controllerView.haptics.level) {
+                Haptics.Level.OFF -> R.string.sheet_vibration_off
+                Haptics.Level.LIGHT -> R.string.sheet_vibration_light
+                Haptics.Level.STRONG -> R.string.sheet_vibration_strong
+            }
+        )
+
+        override fun tvMenuKeysOn(): Boolean = tvNavigation
+
+        override fun pendingUpdateLabel(): String? = updateNotice.pendingUpdateLabel()
+
+        override fun onConnectToPaired() = showPairedDevicePicker()
+        override fun onMakeDiscoverable() = makeDiscoverable()
+        override fun onDisconnect() = hidManager.disconnect()
+        override fun onChooseStyle() = showSkinPicker()
+        override fun onMoveButtons() = startLayoutEdit()
+        override fun onChooseVibration() = showHapticsPicker()
+        override fun onToggleTvMenuKeys() = toggleTvNavigation()
+        override fun onBackgroundPicture() = showBackgroundMenu()
+        override fun onCheckForUpdates() = checkForUpdates()
+        override fun onBluetoothSettings() {
+            startActivity(Intent(android.provider.Settings.ACTION_BLUETOOTH_SETTINGS))
+        }
+        override fun onHelp() = showHelp()
     }
 
     /**
@@ -355,7 +417,13 @@ class MainActivity : AppCompatActivity(),
      * the one that runs is the one the user asked for. The HID link is left untouched; the
      * dialog sits over the controller and the pad keeps working underneath it.
      */
-    private fun checkForUpdates() {
+    /**
+     * The manual menu action. Always does a fresh check — the once-a-day window belongs to the
+     * automatic notice and must never make the button refuse to look.
+     */
+    private fun checkForUpdates() = openUpdateFlow()
+
+    private fun openUpdateFlow() {
         val flow = updateFlow ?: UpdateFlow(this).also { updateFlow = it }
         flow.start()
     }
@@ -541,7 +609,8 @@ class MainActivity : AppCompatActivity(),
             getString(R.string.skin_xbox),
             getString(R.string.skin_snes),
             getString(R.string.skin_nes),
-            getString(R.string.skin_gameboy)
+            getString(R.string.skin_gameboy),
+            getString(R.string.skin_touch)
         )
         val current = when (controllerView.skin) {
             ControllerView.Skin.PS -> 0
@@ -549,6 +618,7 @@ class MainActivity : AppCompatActivity(),
             ControllerView.Skin.SNES -> 2
             ControllerView.Skin.NES -> 3
             ControllerView.Skin.GAMEBOY -> 4
+            ControllerView.Skin.TOUCH -> 5
         }
         AlertDialog.Builder(this)
             .setTitle(R.string.action_skin)
@@ -558,6 +628,7 @@ class MainActivity : AppCompatActivity(),
                     2 -> ControllerView.Skin.SNES to "SNES"
                     3 -> ControllerView.Skin.NES to "NES"
                     4 -> ControllerView.Skin.GAMEBOY to "GAMEBOY"
+                    5 -> ControllerView.Skin.TOUCH to "TOUCH"
                     else -> ControllerView.Skin.PS to "PS"
                 }
                 controllerView.skin = skin
@@ -670,7 +741,9 @@ class MainActivity : AppCompatActivity(),
             // phone-has-to-connect-outwards step is the one people miss, and it reads better
             // as its own block than buried in the TV instructions.
             .setMessage(
-                getString(R.string.help_text) + "\n\n" + getString(R.string.help_windows)
+                getString(R.string.help_text) + "\n\n" +
+                    getString(R.string.help_windows) + "\n\n" +
+                    getString(R.string.help_touch)
             )
             .setPositiveButton(android.R.string.ok, null)
             .show()

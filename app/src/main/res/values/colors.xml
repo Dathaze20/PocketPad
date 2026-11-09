@@ -13,4 +13,20 @@
     <color name="pp_cross">#FF3498DB</color>
     <color name="pp_square">#FFE78FB3</color>
     <color name="ic_launcher_background">#FF1A1B2E</color>
+
+    <!-- Settings sheet -->
+    <color name="pp_row_pressed">#FF2A2E42</color>
+    <color name="pp_connected">#FF39E58C</color>
+    <color name="pp_idle">#FF8A8FA8</color>
+    <color name="pp_danger">#FFFF6B6B</color>
+    <!-- Action teal, shared with the update banner so an update reads the same everywhere. -->
+    <color name="pp_teal">#FF00A89E</color>
+    <color name="pp_teal_pressed">#FF00857E</color>
+
+    <!-- Update banner, matching My Music's .battery-banner palette exactly. -->
+    <color name="pp_banner_bg">#FF1E293B</color>
+    <color name="pp_banner_border">#FF334155</color>
+    <color name="pp_banner_text">#FFE2E8F0</color>
+    <color name="pp_banner_sub">#FF94A3B8</color>
+    <color name="pp_banner_dismiss">#FF64748B</color>
 </resources>

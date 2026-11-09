@@ -6,7 +6,7 @@ The phone registers itself with Android's native `BluetoothHidDevice` API as a B
 
 **Nothing has to be installed on the receiving device.** There is no companion app, no pairing server, and no proprietary network protocol: input travels over the Bluetooth HID link and, optionally, over USB from a controller plugged into the phone.
 
-The app does hold the `INTERNET` permission, for one thing only — **Settings → Check for updates**, which asks GitHub whether a newer release exists and, if you say yes, downloads the APK. Nothing else in the app reaches the network, the check runs only when you tap it, and no button press, layout, background picture or setting is ever uploaded. See [Updating](#updating) and [docs/PRIVACY_POLICY.md](docs/PRIVACY_POLICY.md).
+The app does hold the `INTERNET` permission, for one thing only — asking GitHub whether a newer PocketPad has been released. **Settings → Check for updates** does that whenever you tap it, and a few seconds after launch the app does it quietly on its own, **at most once a day**, showing a small dismissible strip only if something newer exists. Nothing downloads or installs without you pressing Download, there is no background polling and no system notification, and no button press, layout, background picture or setting is ever uploaded. See [Updating](#updating) and [docs/PRIVACY_POLICY.md](docs/PRIVACY_POLICY.md).
 
 That is the main thing separating PocketPad from most "phone as controller" projects, which stream input to a helper application or a desktop server over Wi-Fi. PocketPad speaks the standard the host already understands.
 
@@ -103,6 +103,34 @@ Five styles, switchable from the ⚙ menu. Every style drives the **same** HID r
 | **Super Nintendo** | X / A / B / Y in SNES colours, L / R, SELECT / START |
 | **NES** | B / A, SELECT / START |
 | **Game Boy** | B / A on the diagonal, SELECT / START |
+| **Touch shooter** | A phone-style layout: floating movement stick, drag-to-look camera area, and buttons named by what they do (FIRE, AIM, JUMP, BUILD) rather than by a pad's letters. [What it can and cannot do](#touch-shooter-style) |
+
+### Touch shooter style
+
+For anyone who learned to play on a phone rather than on a pad. The movement stick appears
+wherever your left thumb lands and follows it across the screen; everything not under a button
+is a camera area, so your right thumb looks around by dragging. Buttons are placed and sized
+with **Move buttons** like any other style, and saved separately from the rest.
+
+It sends ordinary gamepad buttons, so set the game's own controller bindings to match: FIRE is
+the right trigger, AIM the left trigger, JUMP the bottom face button, CROUCH the right face
+button, USE the left face button, SWAP the top face button, SPRINT the left stick click, BUILD
+the left shoulder, EDIT the right shoulder, and the four quick slots are the d-pad directions.
+
+**Two limits worth knowing before you try it.**
+
+*Dragging to look is not the same as it is on a phone, and cannot be.* A drag is a
+displacement — it tells the game how far to turn, so the same swipe always turns you the same
+amount. A gamepad stick is a rate — it only says how fast to keep turning. There is no gamepad
+input meaning "rotate this much, now", so PocketPad turns how fast your finger moves into how
+far the stick is pushed. That plays well and it is not identical; small precise aiming in
+particular feels softer. This is a property of the Bluetooth HID gamepad protocol, not
+something a future version fixes.
+
+*PocketPad cannot see the game.* Nothing comes back from the TV or the PC, so it has no way to
+know what you are standing over, what is in each slot, how much ammo is left, or whether you
+are in build mode. Buttons that a phone shows only when they are useful are always on screen
+here, and the quick slots are numbered rather than showing your actual items.
 
 ### Customisation
 
@@ -263,7 +291,7 @@ Publishing to Google Play is documented step by step in **[docs/PLAY_STORE_CHECK
 - **Bluetooth input latency depends on the host, the radio environment and distance.** No timing figures are claimed here because none have been measured for this project.
 - Hardware behaviour — pairing, per-game input handling, USB OTG — can only be confirmed on real devices. Continuous integration proves the project compiles, not that a given TV will accept it.
 
-**Privacy.** The app collects nothing. Its only network use is the update check you start yourself. See [docs/PRIVACY_POLICY.md](docs/PRIVACY_POLICY.md).
+**Privacy.** The app collects nothing. Its only network use is the update check — the one you start yourself and a quiet once-a-day one that only ever shows a dismissible strip. See [docs/PRIVACY_POLICY.md](docs/PRIVACY_POLICY.md).
 
 ---
 

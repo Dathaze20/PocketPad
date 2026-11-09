@@ -21,6 +21,7 @@
     <string name="skin_snes">Super Nintendo</string>
     <string name="skin_nes">NES</string>
     <string name="skin_gameboy">Game Boy</string>
+    <string name="skin_touch">Touch shooter (phone-style)</string>
     <string name="haptics_strong">Strong (feels like real buttons)</string>
     <string name="haptics_light">Light</string>
     <string name="haptics_off">Off</string>
@@ -42,6 +43,10 @@
     <string name="edit_cancel">CANCEL</string>
     <string name="edit_hint">Drag any button where you want it, then tap SAVE. DEFAULT puts everything back.</string>
     <string name="edit_saved">Layout saved</string>
+    <plurals name="edit_saved_overlap">
+        <item quantity="one">Layout saved — %1$d pair of buttons overlaps. The nearer one wins, so the other is harder to hit. RESET restores the default layout.</item>
+        <item quantity="other">Layout saved — %1$d pairs of buttons overlap. The nearer one wins, so the others are harder to hit. RESET restores the default layout.</item>
+    </plurals>
     <string name="edit_defaults_restored">Default layout restored</string>
     <string name="action_tv_nav_on">TV menu keys: ON — turn OFF to play</string>
     <string name="action_tv_nav_off">TV menu keys: OFF — turn ON to browse menus</string>
@@ -74,5 +79,39 @@
     <string name="status_connect_refused">%1$s turned the controller connection down. Pair the phone from that device\'s Bluetooth settings first, then try again.</string>
     <string name="status_profile_unavailable">Couldn\'t reach Bluetooth. Turn Bluetooth off and on, then reopen PocketPad.</string>
     <string name="bt_advertise_needed">PocketPad also needs the \"Nearby devices\" permission to make your phone discoverable. Without it the controller still works with devices you already paired, but no new device can find it.</string>
+    <string name="help_touch">Touch shooter style:\n\nA phone-style layout for games played on a TV or PC \u2014 a movement stick that appears wherever your left thumb lands, and a camera area covering everything not under a button, so your right thumb can look around by dragging.\n\nThe buttons are named by what they do (FIRE, AIM, JUMP, BUILD) rather than by a pad\u2019s letters, but they send ordinary gamepad buttons. Set the game\u2019s own controller bindings to match: FIRE is the right trigger, AIM the left trigger, JUMP the bottom face button, CROUCH the right face button, USE the left face button, SWAP the top face button, SPRINT the left stick click, BUILD the left shoulder, EDIT the right shoulder, and the four quick slots are the d-pad directions.\n\nTwo honest limits:\n\nDragging to look is NOT the same as it is on a phone. A drag tells a phone game how far to turn; a gamepad stick can only say how fast to keep turning. PocketPad turns how quickly your finger moves into how far the stick is pushed, which plays well but feels softer for small, precise aiming. No Bluetooth gamepad can do better than this.\n\nPocketPad cannot see the game. There is no connection back from the TV or PC, so it has no way to know what you are standing over, what is in each slot, how much ammo is left, or whether you are building. Buttons that appear only when they are useful on a phone are always on screen here, and the slots are numbered rather than showing your actual items.\n\nMove buttons works in this style too, and its layout is saved separately from the other styles.</string>
     <string name="help_windows">PC (Windows 10/11) and tablets:\n\n1. In PocketPad: tap \u201cMake phone discoverable\u201d.\n2. On the PC: Settings \u2192 Bluetooth &amp; devices \u2192 Add device \u2192 Bluetooth, pick your phone, and confirm the code on both screens.\n3. Back in PocketPad: Settings \u2192 \u201cConnect to a paired device\u201d \u2192 pick the PC.\n\nStep 3 is not optional. A PC that pairs with a phone files it away as a phone and never goes looking for a controller on it, so the phone has to open the controller connection itself. If the PC refuses, PocketPad now says so instead of sitting on \u201cconnecting\u201d.</string>
+
+    <!-- Settings sheet -->
+    <string name="sheet_logo_glyph" translatable="false">P</string>
+    <string name="sheet_chevron" translatable="false">\u203A</string>
+    <string name="sheet_status_connected">Connected \u00B7 %1$s</string>
+    <string name="sheet_status_disconnected">Not connected</string>
+    <string name="sheet_group_connection">Connection</string>
+    <string name="sheet_group_controller">Controller</string>
+    <string name="sheet_group_appearance">Appearance</string>
+    <string name="sheet_group_system">System</string>
+    <string name="sheet_sub_connect">Open the link from this phone</string>
+    <string name="sheet_sub_discoverable">So a TV or PC can pair with it</string>
+    <string name="sheet_tv_menu_keys">TV menu keys</string>
+    <string name="sheet_sub_tv_menu_keys">For browsing menus, not for games</string>
+    <string name="sheet_badge_update">NEW</string>
+    <!-- Short style names: the full ones ("PlayStation (PS4 / PS5)") do not fit on a row. -->
+    <string name="sheet_style_ps">PlayStation</string>
+    <string name="sheet_style_xbox">Xbox</string>
+    <string name="sheet_style_snes">SNES</string>
+    <string name="sheet_style_nes">NES</string>
+    <string name="sheet_style_gameboy">Game Boy</string>
+    <string name="sheet_style_touch">Touch shooter</string>
+    <string name="sheet_vibration_off">Off</string>
+    <string name="sheet_vibration_light">Light</string>
+    <string name="sheet_vibration_strong">Strong</string>
+
+    <!-- Automatic update notice -->
+    <string name="banner_title">PocketPad %1$s is available</string>
+    <string name="banner_subtitle">You have %1$s \u00B7 %2$s. Installs over this one; nothing is lost.</string>
+    <string name="banner_subtitle_no_size">You have %1$s. Installs over this one; nothing is lost.</string>
+    <string name="banner_update_now">Update Now</string>
+    <string name="banner_dismiss_glyph" translatable="false">\u2715</string>
+    <string name="banner_dismiss_description">Dismiss for today</string>
 </resources>

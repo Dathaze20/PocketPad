@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The settings sheet.
+
+  It replaces an AlertDialog.setItems() list of eleven equal-weight strings, which showed no
+  state, no grouping and no icons. The shell lives here; the rows are built in SettingsSheet.kt
+  so each one can carry its current value and so the list stays in one readable place.
+
+  The height is capped in code rather than here, because on the Galaxy A17 in landscape the
+  whole sheet would otherwise be taller than the screen.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:background="@drawable/sheet_bg"
+    android:paddingBottom="8dp">
+
+    <!-- Grab handle: says "this came up from the bottom and can go back down". -->
+    <View
+        android:layout_width="36dp"
+        android:layout_height="4dp"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginTop="9dp"
+        android:layout_marginBottom="10dp"
+        android:background="@drawable/sheet_grab" />
+
+    <!--
+      Connection state, at the top, because it is the one thing someone opening this menu is
+      most likely to want to know and the old list did not show it anywhere.
+    -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingStart="18dp"
+        android:paddingEnd="18dp"
+        android:paddingBottom="12dp">
+
+        <TextView
+            android:id="@+id/sheetLogo"
+            android:layout_width="34dp"
+            android:layout_height="34dp"
+            android:background="@drawable/icon_tile"
+            android:backgroundTint="@color/pp_accent"
+            android:gravity="center"
+            android:text="@string/sheet_logo_glyph"
+            android:textColor="@color/pp_background"
+            android:textSize="17sp"
+            android:textStyle="bold"
+            android:importantForAccessibility="no" />
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="11dp"
+            android:orientation="vertical">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/app_name"
+                android:textColor="@color/pp_text"
+                android:textSize="16sp"
+                android:textStyle="bold" />
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginTop="2dp">
+
+                <View
+                    android:id="@+id/sheetStatusDot"
+                    android:layout_width="8dp"
+                    android:layout_height="8dp"
+                    android:layout_marginEnd="6dp"
+                    android:background="@drawable/status_dot" />
+
+                <TextView
+                    android:id="@+id/sheetStatusText"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textColor="@color/pp_text_dim"
+                    android:textSize="12sp"
+                    tools:ignore="SelectableText"
+                    xmlns:tools="http://schemas.android.com/tools" />
+            </LinearLayout>
+        </LinearLayout>
+    </LinearLayout>
+
+    <ScrollView
+        android:id="@+id/sheetScroll"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:scrollbars="none"
+        android:fillViewport="false">
+
+        <LinearLayout
+            android:id="@+id/sheetRows"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:paddingBottom="4dp" />
+    </ScrollView>
+</LinearLayout>

@@ -51,7 +51,7 @@ class ControllerView @JvmOverloads constructor(
     attrs: AttributeSet? = null
 ) : View(context, attrs) {
 
-    enum class Skin { PS, XBOX, SNES, NES, GAMEBOY }
+    enum class Skin { PS, XBOX, SNES, NES, GAMEBOY, TOUCH }
 
     /** Connection state shown by the halo around the PS/home button. */
     enum class LinkState { IDLE, DISCOVERABLE, CONNECTED }
@@ -98,6 +98,16 @@ class ControllerView @JvmOverloads constructor(
         var radius = 0f
         var pointerId = -1
         val pressed: Boolean get() = pointerId != -1
+
+        /**
+         * Whether this control only takes touches no other control wanted.
+         *
+         * Only the touch style's camera surface sets this. It covers the whole screen, so
+         * scoring it against the buttons by distance would let it win near the middle of the
+         * display; instead it is held back and offered the touch only if nothing else claimed
+         * it. That is what keeps a finger dragging the camera from stealing the fire button.
+         */
+        open val claimsLeftovers: Boolean get() = false
 
         open fun contains(x: Float, y: Float): Boolean =
             hypot((x - cx).toDouble(), (y - cy).toDouble()) <= radius * 1.15
@@ -212,7 +222,14 @@ class ControllerView @JvmOverloads constructor(
             }
         }
 
+        /** Where the finger landed, so a trigger can tell how far it has since slid. */
+        private var downY = 0f
+
+        private val isTrigger: Boolean
+            get() = buttonIndex == HidConstants.BTN_L2 || buttonIndex == HidConstants.BTN_R2
+
         override fun onDown(x: Float, y: Float) {
+            downY = y
             touchState.setButton(buttonIndex, true)
             setTrigger(255)
             // Transmit first, buzz second. The vibrator call takes a moment to
@@ -222,6 +239,19 @@ class ControllerView @JvmOverloads constructor(
             if (isHome) postDelayed(longPressRunnable, 700)
         }
 
+        /**
+         * Sliding up from a trigger eases it off; everything else ignores movement.
+         *
+         * A press still starts at full scale and a finger that stays put never changes, so
+         * tapping and holding behave exactly as they always have. This only adds a way to
+         * feather a throttle, which a button alone cannot do.
+         */
+        override fun onMove(x: Float, y: Float) {
+            if (!isTrigger) return
+            val value = ControlGeometry.triggerValue(y - downY, radius)
+            if (setTrigger(value)) notifyChanged()
+        }
+
         override fun onUp() {
             if (isHome) removeCallbacks(longPressRunnable)
             touchState.setButton(buttonIndex, false)
@@ -229,13 +259,14 @@ class ControllerView @JvmOverloads constructor(
             notifyChanged()
         }
 
-        /** L2/R2 are triggers, so they drive the analog axis as well as the
-         *  button bit — games that read a throttle need the axis. */
-        private fun setTrigger(value: Int) {
-            when (buttonIndex) {
-                HidConstants.BTN_L2 -> touchState.lt = value
-                HidConstants.BTN_R2 -> touchState.rt = value
-            }
+        /**
+         * L2/R2 are triggers, so they drive the analog axis as well as the button bit — games
+         * that read a throttle need the axis. Returns whether anything actually changed.
+         */
+        private fun setTrigger(value: Int): Boolean = when (buttonIndex) {
+            HidConstants.BTN_L2 -> (touchState.lt != value).also { touchState.lt = value }
+            HidConstants.BTN_R2 -> (touchState.rt != value).also { touchState.rt = value }
+            else -> false
         }
 
         override fun draw(canvas: Canvas) {
@@ -297,6 +328,167 @@ class ControllerView @JvmOverloads constructor(
         }
     }
 
+    /**
+     * Movement stick for the touch style, centred wherever the thumb lands.
+     *
+     * Kept separate from [Stick] rather than adding a mode to it, so there is no way for this
+     * to alter how the Xbox or PlayStation sticks behave.
+     */
+    private inner class FloatingMoveStick : Control() {
+        private var originX = 0f
+        private var originY = 0f
+        private var knobX = 0f
+        private var knobY = 0f
+        private var active = false
+
+        override fun onDown(x: Float, y: Float) {
+            originX = x
+            originY = y
+            active = true
+            knobX = 0f
+            knobY = 0f
+            haptics.press()
+            invalidate()
+        }
+
+        override fun onMove(x: Float, y: Float) {
+            val travel = radius * ControlGeometry.STICK_TRAVEL
+            val origin = TouchModeGeometry.FloatingStick.follow(originX, originY, x, y, travel)
+            originX = origin.x
+            originY = origin.y
+            val reading = ControlGeometry.stickReading(x - originX, y - originY, radius)
+            knobX = reading.knobX
+            knobY = reading.knobY
+            if (touchState.lx != reading.x || touchState.ly != reading.y) {
+                touchState.lx = reading.x
+                touchState.ly = reading.y
+                notifyChanged()
+            }
+        }
+
+        override fun onUp() {
+            active = false
+            knobX = 0f
+            knobY = 0f
+            if (touchState.lx != 128 || touchState.ly != 128) {
+                touchState.lx = 128
+                touchState.ly = 128
+                notifyChanged()
+            }
+            invalidate()
+        }
+
+        override fun draw(canvas: Canvas) {
+            // A faint resting ring shows where the zone is; once a thumb is down the stick is
+            // drawn where that thumb actually put it.
+            val baseX = if (active) originX else cx
+            val baseY = if (active) originY else cy
+            strokePaint.color = withAlpha(outlineColor, if (active) 120 else 55)
+            canvas.drawCircle(baseX, baseY, radius * ControlGeometry.STICK_TRAVEL, strokePaint)
+            moldPaint.shader = null
+            moldPaint.color = withAlpha(Color.BLACK, if (active) 90 else 45)
+            canvas.drawCircle(baseX, baseY, radius * 0.92f, moldPaint)
+
+            val kx = baseX + knobX
+            val ky = baseY + knobY
+            moldPaint.color = withAlpha(Color.BLACK, 120)
+            canvas.drawCircle(kx, ky + radius * 0.05f, radius * 0.40f, moldPaint)
+            moldPaint.color = if (active) accentColor else withAlpha(textColor, 150)
+            canvas.drawCircle(kx, ky, radius * 0.38f, moldPaint)
+            strokePaint.color = withAlpha(Color.WHITE, 60)
+            canvas.drawCircle(kx, ky, radius * 0.38f, strokePaint)
+        }
+    }
+
+    /**
+     * The look area: everything not covered by a button turns the camera.
+     *
+     * Reports the right stick from how fast the finger is moving. That is an approximation and
+     * not the same thing as the phone's own camera control — see [TouchModeGeometry.CameraDrag]
+     * for exactly why it cannot be.
+     */
+    private inner class CameraSurface : Control() {
+        private var lastX = 0f
+        private var lastY = 0f
+        private var downX = 0f
+        private var downY = 0f
+        private var moved = false
+
+        /** Only ever takes a touch no button wanted. */
+        override val claimsLeftovers: Boolean get() = true
+
+        /** The whole view, so it catches anything left over wherever it lands. */
+        override fun contains(x: Float, y: Float): Boolean = true
+
+        private val recentre = Runnable { settle() }
+
+        override fun onDown(x: Float, y: Float) {
+            lastX = x; lastY = y
+            downX = x; downY = y
+            moved = false
+        }
+
+        override fun onMove(x: Float, y: Float) {
+            val dx = x - lastX
+            val dy = y - lastY
+            lastX = x; lastY = y
+            if (!moved && TouchModeGeometry.CameraDrag.isDrag(x - downX, y - downY, tapSlop)) {
+                moved = true
+            }
+            val rx = TouchModeGeometry.CameraDrag.axisFor(dx, cameraSensitivity)
+            val ry = TouchModeGeometry.CameraDrag.axisFor(dy, cameraSensitivity)
+            if (touchState.rx != rx || touchState.ry != ry) {
+                touchState.rx = rx
+                touchState.ry = ry
+                notifyChanged()
+            }
+            // A finger held still sends no events, which would otherwise read as "keep
+            // turning at the last speed" indefinitely.
+            removeCallbacks(recentre)
+            postDelayed(recentre, TouchModeGeometry.CameraDrag.IDLE_RECENTRE_MS)
+        }
+
+        override fun onUp() {
+            removeCallbacks(recentre)
+            settle()
+        }
+
+        private fun settle() {
+            if (touchState.rx == 128 && touchState.ry == 128) return
+            touchState.rx = 128
+            touchState.ry = 128
+            notifyChanged()
+        }
+
+        override fun draw(canvas: Canvas) = Unit
+    }
+
+    /** A button that holds one d-pad direction, for quick-slot selection in the touch style. */
+    private inner class HatButton(var label: String, private val direction: Int) : Control() {
+        override fun onDown(x: Float, y: Float) {
+            touchState.hat = direction
+            notifyChanged()
+            haptics.press()
+        }
+
+        override fun onUp() {
+            if (touchState.hat == direction) {
+                touchState.hat = HidConstants.HAT_NEUTRAL
+                notifyChanged()
+            }
+        }
+
+        override fun draw(canvas: Canvas) {
+            drawMoldedCap(canvas, radius, 0)
+            val capY = cy + capSink(radius)
+            textPaint.textSize = radius * 0.78f
+            textPaint.color = if (pressed) brighten(textColor) else dimTextColor
+            canvas.drawText(
+                label, cx, capY - (textPaint.ascent() + textPaint.descent()) / 2f, textPaint
+            )
+        }
+    }
+
     /** Eight-way d-pad driving the HID hat switch. */
     private inner class Dpad : Control() {
         override fun onDown(x: Float, y: Float) {
@@ -311,16 +503,9 @@ class ControllerView @JvmOverloads constructor(
         }
 
         private fun update(x: Float, y: Float, first: Boolean) {
-            val dx = x - cx
-            val dy = y - cy
-            val dist = hypot(dx.toDouble(), dy.toDouble())
-            val newHat = if (dist < radius * 0.18) {
-                HidConstants.HAT_NEUTRAL
-            } else {
-                // Angle 0 = up, clockwise; snap to nearest of 8 directions.
-                val deg = (Math.toDegrees(atan2(dx.toDouble(), -dy.toDouble())) + 360.0) % 360.0
-                ((deg + 22.5) / 45.0).toInt() % 8
-            }
+            // Angle 0 = up, clockwise, snapped to the nearest of 8 directions. The arithmetic
+            // lives in ControlGeometry so it can be tested without a View.
+            val newHat = ControlGeometry.hatFor(x - cx, y - cy, radius)
             if (newHat != touchState.hat) {
                 touchState.hat = newHat
                 notifyChanged()
@@ -479,20 +664,13 @@ class ControllerView @JvmOverloads constructor(
         }
 
         private fun update(x: Float, y: Float) {
-            var dx = x - cx
-            var dy = y - cy
-            val dist = hypot(dx.toDouble(), dy.toDouble()).toFloat()
-            val max = radius * 0.82f
-            if (dist > max && dist > 0f) {
-                dx *= max / dist
-                dy *= max / dist
-            }
-            knobX = dx
-            knobY = dy
-            setAxes(
-                (128 + (dx / max) * 127).roundToInt().coerceIn(0, 255),
-                (128 + (dy / max) * 127).roundToInt().coerceIn(0, 255)
-            )
+            // Travel, clamping and the dead zone all live in ControlGeometry so they can be
+            // tested. The knob position is kept separate from the axis values, so resting
+            // inside the dead zone still moves the drawn thumb instead of looking stuck.
+            val reading = ControlGeometry.stickReading(x - cx, y - cy, radius)
+            knobX = reading.knobX
+            knobY = reading.knobY
+            setAxes(reading.x, reading.y)
         }
 
         private fun setAxes(ax: Int, ay: Int) {
@@ -713,6 +891,32 @@ class ControllerView @JvmOverloads constructor(
         PadButton("PS", HidConstants.BTN_PS, accentColor, 0.8f, rimmed = true, isHome = true)
     private val gear = GearButton()
 
+    // ---- Touch style only. None of these appear in any other style's control list. ----
+    private val moveStick = FloatingMoveStick()
+    private val cameraSurface = CameraSurface()
+    private val touchFire = PadButton("FIRE", HidConstants.BTN_R2, accentColor, 0.42f, rimmed = true)
+    private val touchAim = PadButton("AIM", HidConstants.BTN_L2, dimTextColor, 0.46f)
+    private val touchJump = PadButton("JUMP", HidConstants.BTN_CROSS, dimTextColor, 0.40f)
+    private val touchCrouch = PadButton("CROUCH", HidConstants.BTN_CIRCLE, dimTextColor, 0.32f)
+    private val touchUse = PadButton("USE", HidConstants.BTN_SQUARE, dimTextColor, 0.44f)
+    private val touchSwap = PadButton("SWAP", HidConstants.BTN_TRIANGLE, dimTextColor, 0.40f)
+    private val touchSprint = PadButton("SPRINT", HidConstants.BTN_L3, dimTextColor, 0.34f)
+    private val touchBuild = PadButton("BUILD", HidConstants.BTN_L1, dimTextColor, 0.38f)
+    private val touchEdit = PadButton("EDIT", HidConstants.BTN_R1, dimTextColor, 0.42f)
+    private val touchMenu = PadButton("MENU", HidConstants.BTN_OPTIONS, dimTextColor, 0.36f)
+    private val touchMark = PadButton("MARK", HidConstants.BTN_SHARE, dimTextColor, 0.36f)
+    private val slot1 = HatButton("1", 0)
+    private val slot2 = HatButton("2", 2)
+    private val slot3 = HatButton("3", 4)
+    private val slot4 = HatButton("4", 6)
+
+    /** Camera turn rate. Fixed for now; the layout editor already handles size and position. */
+    private var cameraSensitivity = TouchModeGeometry.CameraDrag.DEFAULT_SENSITIVITY
+
+    /** Movement past this is a drag rather than a tap, in pixels. */
+    private val tapSlop: Float
+        get() = 12f * resources.displayMetrics.density
+
     private var activeControls: List<Control> = emptyList()
 
     // ---------------------------------------------------- custom layouts
@@ -723,7 +927,15 @@ class ControllerView @JvmOverloads constructor(
         "ftop" to faceTop, "fright" to faceRight, "fbottom" to faceBottom,
         "fleft" to faceLeft, "l1" to btnL1, "l2" to btnL2, "r1" to btnR1,
         "r2" to btnR2, "l3" to btnL3, "r3" to btnR3, "share" to btnShare,
-        "options" to btnOptions, "home" to btnHome, "gear" to gear
+        "options" to btnOptions, "home" to btnHome, "gear" to gear,
+        // Touch style. Saved under the same per-style, per-orientation key as everything
+        // else, so moving these cannot disturb any other style's layout. The camera surface
+        // is deliberately absent: it is the whole screen and there is nothing to place.
+        "tmove" to moveStick, "tfire" to touchFire, "taim" to touchAim, "tjump" to touchJump,
+        "tcrouch" to touchCrouch, "tuse" to touchUse, "tswap" to touchSwap,
+        "tsprint" to touchSprint, "tbuild" to touchBuild, "tedit" to touchEdit,
+        "tmenu" to touchMenu, "tmark" to touchMark,
+        "tslot1" to slot1, "tslot2" to slot2, "tslot3" to slot3, "tslot4" to slot4
     )
 
     private val layoutPrefs =
@@ -923,6 +1135,19 @@ class ControllerView @JvmOverloads constructor(
                     btnL1, btnR1, btnShare, btnOptions, btnHome, gear
                 )
             }
+            Skin.TOUCH -> {
+                // Named by what each one does rather than by a pad's letters, because the
+                // point of this style is that nobody has to translate. The camera surface is
+                // listed last and only takes touches the buttons did not want.
+                activeControls = listOf(
+                    moveStick,
+                    touchFire, touchAim, touchJump, touchCrouch, touchUse, touchSwap,
+                    touchSprint, touchBuild, touchEdit, touchMenu, touchMark,
+                    slot1, slot2, slot3, slot4,
+                    gear,
+                    cameraSurface
+                )
+            }
             Skin.NES, Skin.GAMEBOY -> {
                 val color = if (skin == Skin.NES) nesColor else gbColor
                 faceRight.label = "A"; faceRight.labelColor = color; faceRight.labelScale = 0.9f
@@ -935,6 +1160,52 @@ class ControllerView @JvmOverloads constructor(
                 )
             }
         }
+    }
+
+    /**
+     * The free control nearest this touch, or null when none reaches it.
+     *
+     * Nearest rather than first-in-the-list: hit areas are deliberately larger than what is
+     * drawn, so they can overlap, and list order used to decide the winner. Since the sticks
+     * are listed before the face buttons, a face button moved near a stick in the layout editor
+     * became permanently unpressable.
+     */
+    private fun pickControlAt(x: Float, y: Float): Control? {
+        var best: Control? = null
+        var bestScore = Float.MAX_VALUE
+        for (control in activeControls) {
+            if (control.pressed || control.claimsLeftovers) continue
+            val score = ControlGeometry.hitScore(x - control.cx, y - control.cy, control.radius)
+            if (ControlGeometry.isHit(score) && score < bestScore) {
+                bestScore = score
+                best = control
+            }
+        }
+        if (best != null) return best
+        // Nothing wanted it, so a surface that takes leftovers may have it — the camera area
+        // in the touch style. Buttons are always offered the touch first.
+        return activeControls.firstOrNull { !it.pressed && it.claimsLeftovers }
+    }
+
+    /**
+     * Pairs of visible controls whose touch areas intersect in the current layout.
+     *
+     * Overlap no longer makes a control unreachable, but it does make one of the pair harder to
+     * hit than it looks, so the editor says so on save rather than letting it pass unnoticed.
+     */
+    fun overlappingControlCount(): Int {
+        var count = 0
+        for (i in activeControls.indices) {
+            for (j in i + 1 until activeControls.size) {
+                val a = activeControls[i]
+                val b = activeControls[j]
+                // The camera surface covers everything by design; counting it would report
+                // every control in the touch style as overlapping.
+                if (a.claimsLeftovers || b.claimsLeftovers) continue
+                if (ControlGeometry.overlaps(a.cx, a.cy, a.radius, b.cx, b.cy, b.radius)) count++
+            }
+        }
+        return count
     }
 
     private fun releaseAllPointers() {
@@ -965,6 +1236,7 @@ class ControllerView @JvmOverloads constructor(
             Skin.PS -> if (portrait) layoutPsPortrait(w, h) else layoutPsLandscape(w, h)
             Skin.XBOX -> if (portrait) layoutXboxPortrait(w, h) else layoutXboxLandscape(w, h)
             Skin.SNES -> if (portrait) layoutSnesPortrait(w, h) else layoutSnesLandscape(w, h)
+            Skin.TOUCH -> if (portrait) layoutTouchPortrait(w, h) else layoutTouchLandscape(w, h)
             Skin.NES, Skin.GAMEBOY ->
                 if (portrait) layoutRetroPortrait(w, h) else layoutRetroLandscape(w, h)
         }
@@ -1033,6 +1305,76 @@ class ControllerView @JvmOverloads constructor(
         place(btnHome, w * 0.50f, h * 0.44f, small * 1.2f)
         place(btnOptions, w * 0.62f, h * 0.22f, small)
         place(gear, w * 0.045f, h * 0.90f, small * 0.9f)
+    }
+
+    // ---------------------------------------------------------- Touch layouts
+    // Modelled on where a phone shooter puts things: movement under the left thumb, the
+    // actions that matter most under the right, and everything else out at the edges so the
+    // middle of the screen stays free for the camera.
+
+    private fun layoutTouchLandscape(w: Float, h: Float) {
+        val unit = min(h, w * 0.46f)
+        val small = unit * 0.075f
+        val slot = unit * 0.062f
+
+        // The camera takes whatever is left, so it is given the whole area.
+        place(cameraSurface, w * 0.5f, h * 0.5f, max(w, h))
+
+        place(moveStick, w * 0.16f, h * 0.68f, unit * 0.23f)
+        place(touchSprint, w * 0.07f, h * 0.30f, small)
+
+        // Right thumb: fire largest and nearest the resting position, aim just above it.
+        place(touchFire, w * 0.88f, h * 0.70f, unit * 0.145f)
+        place(touchAim, w * 0.735f, h * 0.52f, unit * 0.105f)
+        place(touchJump, w * 0.955f, h * 0.44f, unit * 0.095f)
+        place(touchCrouch, w * 0.80f, h * 0.90f, small)
+        place(touchUse, w * 0.62f, h * 0.76f, unit * 0.088f)
+        place(touchSwap, w * 0.62f, h * 0.52f, small)
+
+        place(touchBuild, w * 0.93f, h * 0.17f, small)
+        place(touchEdit, w * 0.81f, h * 0.17f, small)
+        place(touchMark, w * 0.69f, h * 0.17f, small)
+        place(touchMenu, w * 0.57f, h * 0.10f, small)
+
+        // Quick slots along the bottom middle, out of the way of both thumbs.
+        val slotY = h * 0.955f
+        place(slot1, w * 0.40f, slotY, slot)
+        place(slot2, w * 0.465f, slotY, slot)
+        place(slot3, w * 0.53f, slotY, slot)
+        place(slot4, w * 0.595f, slotY, slot)
+
+        place(gear, w * 0.045f, h * 0.10f, small * 0.9f)
+    }
+
+    private fun layoutTouchPortrait(w: Float, h: Float) {
+        val unit = min(w, h * 0.46f)
+        val small = unit * 0.075f
+        val slot = unit * 0.062f
+
+        place(cameraSurface, w * 0.5f, h * 0.5f, max(w, h))
+
+        place(moveStick, w * 0.24f, h * 0.76f, unit * 0.22f)
+        place(touchSprint, w * 0.10f, h * 0.56f, small)
+
+        place(touchFire, w * 0.80f, h * 0.78f, unit * 0.135f)
+        place(touchAim, w * 0.60f, h * 0.66f, unit * 0.10f)
+        place(touchJump, w * 0.92f, h * 0.60f, unit * 0.092f)
+        place(touchCrouch, w * 0.66f, h * 0.90f, small)
+        place(touchUse, w * 0.44f, h * 0.80f, unit * 0.085f)
+        place(touchSwap, w * 0.44f, h * 0.64f, small)
+
+        place(touchBuild, w * 0.88f, h * 0.17f, small)
+        place(touchEdit, w * 0.70f, h * 0.17f, small)
+        place(touchMark, w * 0.52f, h * 0.17f, small)
+        place(touchMenu, w * 0.34f, h * 0.11f, small)
+
+        val slotY = h * 0.955f
+        place(slot1, w * 0.16f, slotY, slot)
+        place(slot2, w * 0.28f, slotY, slot)
+        place(slot3, w * 0.40f, slotY, slot)
+        place(slot4, w * 0.52f, slotY, slot)
+
+        place(gear, w * 0.08f, h * 0.11f, small * 0.9f)
     }
 
     // ----------------------------------------------------------- Xbox layouts
@@ -1188,6 +1530,9 @@ class ControllerView @JvmOverloads constructor(
             // Accent ring marks every control as grabbable.
             strokePaint.color = accentColor
             for (control in activeControls) {
+                // The camera surface is the whole screen and cannot be placed, so it gets no
+                // grab ring — one would just draw a circle round the entire display.
+                if (control.claimsLeftovers) continue
                 strokePaint.alpha = if (control.pressed) 255 else 120
                 canvas.drawCircle(control.cx, control.cy, control.radius * 1.08f, strokePaint)
             }
@@ -1260,7 +1605,7 @@ class ControllerView @JvmOverloads constructor(
                 }
                 val x = event.getX(index)
                 val y = event.getY(index)
-                val control = activeControls.firstOrNull { !it.pressed && it.contains(x, y) }
+                val control = pickControlAt(x, y)
                 if (control != null) {
                     control.pointerId = id
                     control.onDown(x, y)
@@ -1269,13 +1614,23 @@ class ControllerView @JvmOverloads constructor(
             }
 
             MotionEvent.ACTION_MOVE -> {
+                // One move event can carry new positions for several fingers at once. Each
+                // control used to announce its own change, so two thumbs on two sticks produced
+                // two reports per frame, the first already obsolete by the time it was sent.
+                //
+                // Batching is safe *here specifically*: a move event never contains a press or
+                // a release, so everything folded together genuinely happened at the same
+                // instant. Down and up are deliberately left unbatched — collapsing a press
+                // into its release is exactly how a tap would go missing.
                 var moved = false
+                beginBatch()
                 for (i in 0 until event.pointerCount) {
                     val id = event.getPointerId(i)
                     val control = activeControls.firstOrNull { it.pointerId == id } ?: continue
                     control.onMove(event.getX(i), event.getY(i))
                     moved = true
                 }
+                endBatch()
                 if (moved) invalidate()
             }
 
@@ -1339,7 +1694,7 @@ class ControllerView @JvmOverloads constructor(
                 val index = event.actionIndex
                 val x = event.getX(index)
                 val y = event.getY(index)
-                val control = activeControls.firstOrNull { !it.pressed && it.contains(x, y) }
+                val control = pickControlAt(x, y)
                 if (control != null) {
                     control.pointerId = event.getPointerId(index)
                     haptics.tick()
@@ -1381,7 +1736,32 @@ class ControllerView @JvmOverloads constructor(
         if (!hasWindowFocus) releaseAllPointers()
     }
 
+    /**
+     * While a batch is open, controls record that something changed instead of announcing it,
+     * and one announcement goes out when the batch closes. Only [onTouchEvent]'s move branch
+     * opens one; see the comment there for why that is the only safe place.
+     */
+    private var batching = false
+    private var batchDirty = false
+
+    private fun beginBatch() {
+        batching = true
+        batchDirty = false
+    }
+
+    private fun endBatch() {
+        batching = false
+        if (batchDirty) {
+            batchDirty = false
+            listener?.onTouchStateChanged()
+        }
+    }
+
     private fun notifyChanged() {
+        if (batching) {
+            batchDirty = true
+            return
+        }
         listener?.onTouchStateChanged()
     }
 }
