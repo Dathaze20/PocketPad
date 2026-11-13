@@ -10,6 +10,8 @@ The app does hold the `INTERNET` permission, for one thing only — asking GitHu
 
 That is the main thing separating PocketPad from most "phone as controller" projects, which stream input to a helper application or a desktop server over Wi-Fi. PocketPad speaks the standard the host already understands.
 
+**How it was built:** the problem, the Bluetooth engineering, what has been confirmed on real hardware and what has not are written up in the [case study](CASE_STUDY.md).
+
 ---
 
 ## Contents
@@ -94,7 +96,7 @@ Releases published before this existed carry no `version.json`; the app says so 
 
 ### Controller styles
 
-Five styles, switchable from the ⚙ menu. Every style drives the **same** HID report — face buttons are mapped positionally (bottom / right / left / top), which is the order hosts read regardless of the labels printed on a pad. Switching style changes what you see, never what the host receives.
+Six styles, switchable from the ⚙ menu. Every style drives the **same** HID report — face buttons are mapped positionally (bottom / right / left / top), which is the order hosts read regardless of the labels printed on a pad. Switching style changes what you see, never what the host receives.
 
 | Style | Labels |
 |---|---|
@@ -237,8 +239,8 @@ app/src/main/java/com/dathaze/pocketpad/
     └── Haptics.kt             # Vibration levels
 ```
 
-The `update` package is the only part of the app that touches the network, and it does so
-only from the Settings menu. Everything in it except `AppUpdater` and `UpdateFlow` is free of
+The `update` package is the only part of the app that touches the network: the check you
+start from the Settings menu, and the quiet once-a-day check a few seconds after launch. Everything in it except `AppUpdater` and `UpdateFlow` is free of
 `android.*`, which is what lets the version comparison, the URL rules and the download checks
 be unit-tested directly rather than inferred from a download that happened to work.
 
