@@ -7,9 +7,9 @@ import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.view.ViewTreeObserver
 import android.view.Window
 import android.view.WindowManager
-import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.Switch
 import android.widget.TextView
@@ -17,24 +17,27 @@ import androidx.core.content.ContextCompat
 import com.dathaze.pocketpad.R
 
 /**
- * The settings menu, as a sheet that rises from the bottom of the screen.
+ * The settings menu: a list of rows in a sheet that rises from the bottom of the screen.
  *
- * It replaces `AlertDialog.setItems()` — eleven equal-weight strings with no icons, no grouping
- * and no indication of any current setting. Three things change the experience rather than just
- * the look:
+ * The list itself is the one it has always been — tinted glyph on the left, label with an
+ * optional subtitle, current value or switch on the right, chevron at the end, grouped under
+ * four headings. What changed is that it now fits on one screen:
  *
- *  - **The connection state is at the top.** It is the first thing anyone opening this menu
- *    wants to know and the old list did not show it at all. It is reported from the live HID
- *    connection, never from a remembered pairing, so "Connected" always means connected.
- *  - **Current values sit on their rows.** The controller style and the vibration level read
- *    out without opening anything, and TV menu keys is a switch rather than a sentence that
- *    changes.
- *  - **Four groups instead of one list.** Connection, Controller, Appearance, System.
+ *  - **Landscape puts the groups in two columns.** A phone on its side has roughly 400dp of
+ *    height and 900dp of width. Eleven rows in one column cannot fit in 400dp; in two columns
+ *    they fit easily, using width that was going spare. See [SettingsListView].
+ *  - **Portrait is the same single column, tighter.** Shorter rows, less padding, smaller
+ *    headings, and labels short enough not to need two lines.
+ *  - **Nothing can break mid-word.** Every label and subtitle is one line that ellipsizes; a
+ *    `TextView` only splits a word when it is trying to wrap, and these never wrap.
+ *  - **It shrinks before it scrolls.** At font scales large enough to overflow even two
+ *    columns, every row and heading is scaled down together rather than the list scrolling.
+ *  - **Disconnect is only there when there is something to disconnect from.**
  *
- * It sits at the bottom so it is reachable with the thumb already holding the phone, and it is
- * no taller than it needs to be, capped so landscape on a tall phone still fits.
+ * The connection state is read from the live HID link, never from the bonded-device list, so
+ * "Connected" always means connected rather than "paired at some point".
  *
- * Every action the old menu had is still here and still does the same thing.
+ * Every action the original menu had is still here and still does the same thing.
  */
 class SettingsSheet(private val activity: Activity) {
 
@@ -64,6 +67,9 @@ class SettingsSheet(private val activity: Activity) {
 
     private var dialog: Dialog? = null
 
+    /** Kept so the sheet can rebuild itself when the phone is rotated. */
+    private var host: Host? = null
+
     /** Tint for a row's glyph tile, so related actions read as a set. */
     private enum class Tint(val colorRes: Int) {
         NEUTRAL(R.color.pp_control),
@@ -74,12 +80,37 @@ class SettingsSheet(private val activity: Activity) {
     }
 
     fun show(host: Host) {
+        show(host, animate = true)
+    }
+
+    /**
+     * Rebuild the sheet for the new orientation, if it is open.
+     *
+     * `MainActivity` declares `configChanges` for orientation and screen size, so Android does
+     * not recreate anything when the phone is turned — which means an open dialog keeps the
+     * layout it was inflated with. Without this, the portrait list is simply stretched across a
+     * landscape window: the wrong number of columns, the wrong row metrics, and a list far too
+     * tall for the screen it is now on.
+     *
+     * Rebuilt without the rise-from-the-bottom animation, because the sheet is already up.
+     */
+    fun onConfigurationChanged() {
+        val current = host ?: return
+        if (dialog?.isShowing != true) return
+        show(current, animate = false)
+    }
+
+    private fun show(host: Host, animate: Boolean) {
         dismiss()
+        this.host = host
+
         val view = LayoutInflater.from(activity).inflate(R.layout.sheet_settings, null, false)
-        val rows = view.findViewById<LinearLayout>(R.id.sheetRows)
+        val list = view.findViewById<SettingsListView>(R.id.sheetList)
+        list.columns = activity.resources.getInteger(R.integer.settings_list_columns)
+        list.gap = activity.resources.getDimensionPixelSize(R.dimen.list_gap)
 
         bindConnectionHeader(view, host)
-        buildRows(rows, host)
+        buildRows(list, host)
 
         val sheet = Dialog(activity, R.style.Theme_PocketPad_Sheet).apply {
             requestWindowFeature(Window.FEATURE_NO_TITLE)
@@ -90,12 +121,16 @@ class SettingsSheet(private val activity: Activity) {
             setBackgroundDrawableResource(android.R.color.transparent)
             setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
             setGravity(Gravity.BOTTOM)
-            attributes = attributes.apply { windowAnimations = R.style.Animation_PocketPad_Sheet }
+            if (animate) {
+                attributes = attributes.apply {
+                    windowAnimations = R.style.Animation_PocketPad_Sheet
+                }
+            }
             // Keep the game behind it visible rather than dimming the whole screen to black.
             setDimAmount(DIM)
             addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
         }
-        capHeight(view)
+        fitToScreen(view)
         dialog = sheet
         sheet.setOnDismissListener { dialog = null }
         sheet.show()
@@ -107,27 +142,35 @@ class SettingsSheet(private val activity: Activity) {
     }
 
     /**
-     * Stop the sheet growing past most of the screen.
+     * Tell the list how much room it has, before the first frame is drawn.
      *
-     * In landscape on a tall phone the full list is taller than the display, and a dialog that
-     * runs off the bottom simply loses its last rows — there is nothing to scroll because the
-     * window itself is oversized. Capping the scroll view instead keeps the handle and the
-     * connection header on screen and lets the rows scroll under them.
+     * The height left for rows is whatever the handle and header do not take, and that is only
+     * known once the view has been measured. So this runs on the first pre-draw, hands the
+     * figure over, and returns false to skip that frame — the list re-measures and the sheet
+     * appears at its final size rather than appearing too tall and visibly snapping smaller.
+     *
+     * The scroll view is capped to the same figure. Shrinking stops at
+     * [SettingsColumns.MIN_SCALE] rather than let the text become unreadable, so at the largest
+     * accessibility font scales a little may still not fit, and without the cap a
+     * bottom-anchored dialog would lose its last rows off the bottom of the screen entirely,
+     * with no way to reach them.
      */
-    private fun capHeight(root: View) {
+    private fun fitToScreen(root: View) {
         val scroll = root.findViewById<ScrollView>(R.id.sheetScroll)
-        val maxSheet = (activity.resources.displayMetrics.heightPixels * MAX_SCREEN_FRACTION).toInt()
-        scroll.viewTreeObserver.addOnPreDrawListener(object :
-            android.view.ViewTreeObserver.OnPreDrawListener {
+        val list = root.findViewById<SettingsListView>(R.id.sheetList)
+        val budget = (activity.resources.displayMetrics.heightPixels * MAX_SCREEN_FRACTION).toInt()
+
+        scroll.viewTreeObserver.addOnPreDrawListener(object : ViewTreeObserver.OnPreDrawListener {
             override fun onPreDraw(): Boolean {
                 scroll.viewTreeObserver.removeOnPreDrawListener(this)
-                val headerHeight = root.height - scroll.height
-                val allowed = (maxSheet - headerHeight).coerceAtLeast(MIN_SCROLL_DP)
+                val chrome = root.height - scroll.height
+                val allowed = (budget - chrome).coerceAtLeast(MIN_LIST_PX)
+                list.maxHeight = allowed
                 if (scroll.height > allowed) {
                     scroll.layoutParams = scroll.layoutParams.apply { height = allowed }
-                    scroll.requestLayout()
                 }
-                return true
+                scroll.requestLayout()
+                return false
             }
         })
     }
@@ -146,47 +189,67 @@ class SettingsSheet(private val activity: Activity) {
         }
     }
 
-    private fun buildRows(rows: LinearLayout, host: Host) {
-        rows.removeAllViews()
+    /**
+     * Build the list, counting the views in each group as it goes.
+     *
+     * [SettingsListView] needs those counts to know where it may cut for a second column. A
+     * heading left at the foot of one column with its rows at the top of the other would be
+     * worse than an uneven split, so the cut can only fall between groups.
+     */
+    private fun buildRows(list: SettingsListView, host: Host) {
+        list.removeAllViews()
+        val groupSizes = ArrayList<Int>(4)
 
-        group(rows, R.string.sheet_group_connection)
-        row(rows, "⇄", Tint.CONNECTION, R.string.action_connect_paired,
+        var connection = 3 // heading + connect + discoverable
+        group(list, R.string.sheet_group_connection)
+        row(list, "⇄", Tint.CONNECTION, R.string.action_connect_paired,
             subtitle = R.string.sheet_sub_connect) { host.onConnectToPaired() }
-        row(rows, "◉", Tint.CONNECTION, R.string.action_discoverable,
+        row(list, "◉", Tint.CONNECTION, R.string.action_discoverable,
             subtitle = R.string.sheet_sub_discoverable) { host.onMakeDiscoverable() }
-        row(rows, "⏻", Tint.DANGER, R.string.action_disconnect,
-            chevron = false) { host.onDisconnect() }
+        // Nothing to disconnect from means nothing to offer. Driven by the live HID link, so
+        // the row appears and disappears with the connection rather than with a pairing.
+        if (host.connectedDeviceName() != null) {
+            row(list, "⏻", Tint.DANGER, R.string.action_disconnect,
+                chevron = false) { host.onDisconnect() }
+            connection++
+        }
+        groupSizes.add(connection)
 
-        group(rows, R.string.sheet_group_controller)
-        row(rows, "⬡", Tint.CONTROLLER, R.string.action_skin,
+        group(list, R.string.sheet_group_controller)
+        row(list, "⬡", Tint.CONTROLLER, R.string.action_skin,
             value = host.controllerStyleLabel()) { host.onChooseStyle() }
-        row(rows, "✥", Tint.CONTROLLER, R.string.action_edit_layout) { host.onMoveButtons() }
-        row(rows, "≈", Tint.CONTROLLER, R.string.action_haptics,
+        row(list, "✥", Tint.CONTROLLER, R.string.action_edit_layout) { host.onMoveButtons() }
+        row(list, "≈", Tint.CONTROLLER, R.string.action_haptics,
             value = host.vibrationLabel()) { host.onChooseVibration() }
-        row(rows, "⌨", Tint.CONTROLLER, R.string.sheet_tv_menu_keys,
+        row(list, "⌨", Tint.CONTROLLER, R.string.sheet_tv_menu_keys,
             subtitle = R.string.sheet_sub_tv_menu_keys,
             switchOn = host.tvMenuKeysOn(),
             chevron = false) { host.onToggleTvMenuKeys() }
+        groupSizes.add(5)
 
-        group(rows, R.string.sheet_group_appearance)
-        row(rows, "▦", Tint.APPEARANCE, R.string.action_background) { host.onBackgroundPicture() }
+        group(list, R.string.sheet_group_appearance)
+        row(list, "▦", Tint.APPEARANCE, R.string.action_background) { host.onBackgroundPicture() }
+        groupSizes.add(2)
 
-        group(rows, R.string.sheet_group_system)
-        row(rows, "⇪", Tint.NEUTRAL, R.string.action_check_updates,
+        group(list, R.string.sheet_group_system)
+        row(list, "⇪", Tint.NEUTRAL, R.string.action_check_updates,
             badge = host.pendingUpdateLabel()) { host.onCheckForUpdates() }
-        row(rows, "⚙", Tint.NEUTRAL, R.string.action_bt_settings) { host.onBluetoothSettings() }
-        row(rows, "?", Tint.NEUTRAL, R.string.action_help) { host.onHelp() }
+        row(list, "⚙", Tint.NEUTRAL, R.string.action_bt_settings) { host.onBluetoothSettings() }
+        row(list, "?", Tint.NEUTRAL, R.string.action_help) { host.onHelp() }
+        groupSizes.add(4)
+
+        list.setGroupSizes(groupSizes.toIntArray())
     }
 
-    private fun group(parent: LinearLayout, labelRes: Int) {
+    private fun group(parent: SettingsListView, labelRes: Int) {
         val tv = LayoutInflater.from(activity)
-            .inflate(R.layout.row_settings_group, parent, false) as TextView
+            .inflate(R.layout.row_settings_group, parent, false) as SettingsHeadingView
         tv.setText(labelRes)
         parent.addView(tv)
     }
 
     private fun row(
-        parent: LinearLayout,
+        parent: SettingsListView,
         glyph: String,
         tint: Tint,
         labelRes: Int,
@@ -197,7 +260,8 @@ class SettingsSheet(private val activity: Activity) {
         chevron: Boolean = true,
         onTap: () -> Unit,
     ) {
-        val view = LayoutInflater.from(activity).inflate(R.layout.row_settings, parent, false)
+        val view = LayoutInflater.from(activity)
+            .inflate(R.layout.row_settings, parent, false) as SettingsRowView
 
         view.findViewById<TextView>(R.id.rowIcon).apply {
             text = glyph
@@ -257,7 +321,14 @@ class SettingsSheet(private val activity: Activity) {
 
     private companion object {
         const val DIM = 0.45f
-        const val MAX_SCREEN_FRACTION = 0.88f
-        const val MIN_SCROLL_DP = 200
+
+        /**
+         * The sheet never covers the whole screen. Leaving a strip of the game visible above it
+         * is what makes it read as a panel over the controller rather than as a new screen.
+         */
+        const val MAX_SCREEN_FRACTION = 0.92f
+
+        /** Floor for the list's allowance, so a bad measurement cannot collapse it to nothing. */
+        const val MIN_LIST_PX = 200
     }
 }

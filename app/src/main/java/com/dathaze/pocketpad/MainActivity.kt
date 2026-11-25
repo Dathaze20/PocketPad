@@ -6,6 +6,7 @@ import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.content.res.Configuration
 import android.hardware.input.InputManager
 import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbManager
@@ -351,6 +352,21 @@ class MainActivity : AppCompatActivity(),
     @SuppressLint("MissingPermission")
     override fun onOpenSettings() {
         settingsSheet.show(settingsHost)
+    }
+
+    /**
+     * Rebuild the settings sheet when the phone is turned.
+     *
+     * The manifest declares `configChanges` for orientation and screen size, so that rotating
+     * mid-game does not tear down and recreate the activity — which is right for the controller,
+     * but it also means nothing recreates an open dialog. Without this the settings sheet keeps
+     * whatever layout it was inflated with: the portrait single-column list stretched across a
+     * landscape window, far too tall for the screen it is now on. See
+     * [SettingsSheet.onConfigurationChanged].
+     */
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        settingsSheet.onConfigurationChanged()
     }
 
     private val settingsSheet by lazy { SettingsSheet(this) }

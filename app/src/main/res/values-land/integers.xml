@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Landscape is two columns side by side. One column of eleven rows cannot fit in the ~400dp of
+  height a phone has on its side, two columns of five or six can, and the width was going spare.
+-->
+<resources>
+    <integer name="settings_list_columns">2</integer>
+</resources>

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  How many columns the settings list is laid out in.
+
+  Portrait is one column: the list reads top to bottom exactly as it always has.
+-->
+<resources>
+    <integer name="settings_list_columns">1</integer>
+</resources>

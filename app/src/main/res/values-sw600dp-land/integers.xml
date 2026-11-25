@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Tablets on their side have the height for one column, but two still reads better across a
+     very wide sheet than one column with a vast empty margin. -->
+<resources>
+    <integer name="settings_list_columns">2</integer>
+</resources>
