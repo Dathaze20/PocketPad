@@ -179,7 +179,11 @@ jobs:
           JSON
           cat version.json
 
-          notes="PocketPad $name (versionCode $code). Auto-built from the newest commit. On your phone: tap PocketPad.apk below, then open the download to install. Already have PocketPad? Settings → Check for updates does this for you."
+          # Built with printf rather than a multi-line assignment so the blank line between the
+          # two paragraphs cannot pick up the YAML block's indentation.
+          support="⭐ If PocketPad is useful to you, please star the repo. It helps other people find it. Support development: https://buymeacoffee.com/dathaze20j"
+          body="PocketPad $name (versionCode $code). Auto-built from the newest commit. On your phone: tap PocketPad.apk below, then open the download to install. Already have PocketPad? Settings → Check for updates does this for you."
+          notes="$(printf '%s\n\n%s' "$support" "$body")"
           if gh release view latest >/dev/null 2>&1; then
             # In place: the tag, the release and the download URL all survive, so nobody ever
             # hits a 404 on the link in the README.
