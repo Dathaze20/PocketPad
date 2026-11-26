@@ -45,4 +45,10 @@
     <!-- The layout editor's panel: how far its edges sit from the screen's. -->
     <dimen name="edit_panel_margin_h">8dp</dimen>
     <dimen name="edit_panel_margin_v">10dp</dimen>
+    <!--
+      The narrowest the panel may be. A percentage of the screen alone does not guarantee that
+      SAVE, DEFAULT and CANCEL fit: on a short landscape screen, or at a large font scale, the
+      last of them gets clipped. Wide enough for all three plus their padding.
+    -->
+    <dimen name="edit_panel_min_width">320dp</dimen>
 </resources>

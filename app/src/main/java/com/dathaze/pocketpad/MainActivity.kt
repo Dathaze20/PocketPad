@@ -561,18 +561,32 @@ class MainActivity : AppCompatActivity(),
         // is never recreated and the layout is never inflated again: a margin resolved from
         // res/values on a portrait launch stays at that value in landscape for the life of the
         // process. That is what made the panel span the whole width on its side.
-        val parentWidth = (editBar.parent as? android.view.View)?.width ?: 0
+        // Taken from the configuration rather than from the parent view's measured width. The
+        // parent is re-laid-out asynchronously after a rotation, so reading it here could still
+        // return the portrait width — which is what made the panel come up a quarter of the
+        // screen wide in landscape: 55% of 1080 instead of 55% of 2340. The configuration is
+        // updated before onConfigurationChanged runs, so it is right on the first try.
+        val density = resources.displayMetrics.density
+        val screenWidth = (resources.configuration.screenWidthDp * density).toInt()
         val percent = resources.getInteger(R.integer.edit_panel_width_percent)
         val marginV = resources.getDimensionPixelSize(R.dimen.edit_panel_margin_v)
-        val fullWidth = percent >= 100 || parentWidth <= 0
+        val fullWidth = percent >= 100 || screenWidth <= 0
         val marginH =
             if (fullWidth) resources.getDimensionPixelSize(R.dimen.edit_panel_margin_h) else 0
 
         val sideChanged = params.gravity != gravity
         params.gravity = gravity
         params.width =
-            if (fullWidth) android.widget.FrameLayout.LayoutParams.MATCH_PARENT
-            else parentWidth * percent / 100
+            if (fullWidth) {
+                android.widget.FrameLayout.LayoutParams.MATCH_PARENT
+            } else {
+                // Never narrower than its own contents need: SAVE, DEFAULT and CANCEL have to
+                // be readable in full, and a percentage of a small screen would not guarantee
+                // that. Never wider than the screen either.
+                val wanted = screenWidth * percent / 100
+                val floor = resources.getDimensionPixelSize(R.dimen.edit_panel_min_width)
+                wanted.coerceIn(floor.coerceAtMost(screenWidth), screenWidth)
+            }
         params.setMargins(marginH, marginV, marginH, marginV)
         params.marginStart = marginH
         params.marginEnd = marginH
