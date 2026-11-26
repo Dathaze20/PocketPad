@@ -419,6 +419,15 @@ class MainActivity : AppCompatActivity(),
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
         settingsSheet.onConfigurationChanged()
+        // The editor panel has to be placed again for the same reason the sheet has to be
+        // rebuilt: nothing is recreated on rotation, so its side, width and margins are all
+        // still the ones chosen for the orientation it was last shown in. Posted because the
+        // new screen size is not known until this pass has been laid out.
+        if (editBar.visibility == android.view.View.VISIBLE) {
+            editBar.post {
+                moveEditPanelAwayFrom(controllerView.selectedControlCentreY(), resetDrag = true)
+            }
+        }
     }
 
     private val settingsSheet by lazy { SettingsSheet(this) }
@@ -536,7 +545,7 @@ class MainActivity : AppCompatActivity(),
      *
      * A manual drag is forgotten at this point, since the panel is being placed deliberately.
      */
-    private fun moveEditPanelAwayFrom(centreY: Float) {
+    private fun moveEditPanelAwayFrom(centreY: Float, resetDrag: Boolean = false) {
         val params = editBar.layoutParams as? android.widget.FrameLayout.LayoutParams ?: return
         val height = controllerView.height
         val atBottom = when {
@@ -544,12 +553,34 @@ class MainActivity : AppCompatActivity(),
             else -> centreY < height / 2f
         }
         val gravity =
-            if (atBottom) android.view.Gravity.BOTTOM else android.view.Gravity.TOP
-        // Only when the side actually changes: otherwise every RESET SIZE would snap the panel
-        // back from wherever the user had dragged it.
-        if (params.gravity != gravity) {
-            params.gravity = gravity
-            editBar.layoutParams = params
+            (if (atBottom) android.view.Gravity.BOTTOM else android.view.Gravity.TOP) or
+                android.view.Gravity.CENTER_HORIZONTAL
+
+        // Size and margins are re-read here, every time, rather than left to the values the
+        // layout was inflated with. The activity declares configChanges for orientation, so it
+        // is never recreated and the layout is never inflated again: a margin resolved from
+        // res/values on a portrait launch stays at that value in landscape for the life of the
+        // process. That is what made the panel span the whole width on its side.
+        val parentWidth = (editBar.parent as? android.view.View)?.width ?: 0
+        val percent = resources.getInteger(R.integer.edit_panel_width_percent)
+        val marginV = resources.getDimensionPixelSize(R.dimen.edit_panel_margin_v)
+        val fullWidth = percent >= 100 || parentWidth <= 0
+        val marginH =
+            if (fullWidth) resources.getDimensionPixelSize(R.dimen.edit_panel_margin_h) else 0
+
+        val sideChanged = params.gravity != gravity
+        params.gravity = gravity
+        params.width =
+            if (fullWidth) android.widget.FrameLayout.LayoutParams.MATCH_PARENT
+            else parentWidth * percent / 100
+        params.setMargins(marginH, marginV, marginH, marginV)
+        params.marginStart = marginH
+        params.marginEnd = marginH
+        editBar.layoutParams = params
+
+        // A deliberate drag survives everything but an actual change of side — otherwise every
+        // RESET SIZE would snap the panel back from wherever the user had put it.
+        if (resetDrag || sideChanged) {
             editBar.translationX = 0f
             editBar.translationY = 0f
         }

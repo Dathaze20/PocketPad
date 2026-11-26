@@ -5,4 +5,10 @@
 -->
 <resources>
     <integer name="settings_list_columns">2</integer>
+
+    <!-- How wide the layout editor's panel is, as a percentage of the screen.
+     Landscape: about half the width, centred, so the triggers in all four corners stay
+     visible and tappable. The panel has to live at the top here, and the triggers are the
+     controls it would otherwise cover. -->
+    <integer name="edit_panel_width_percent">55</integer>
 </resources>

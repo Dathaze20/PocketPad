@@ -1076,6 +1076,9 @@ class ControllerView @JvmOverloads constructor(
         )
     }
 
+    /** Where the selected control sits, or [NO_SELECTION] when nothing is selected. */
+    fun selectedControlCentreY(): Float = selected?.cy ?: NO_SELECTION
+
     /** Resize the selected control. Does nothing when nothing is selected. */
     fun setSelectedControlScale(scale: Float) {
         val control = selected ?: return
