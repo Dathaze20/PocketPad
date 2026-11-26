@@ -1049,15 +1049,31 @@ class ControllerView @JvmOverloads constructor(
      *
      * Null means nothing is selected — on entering edit mode, or after a tap on empty space.
      */
-    var onSelectionChanged: ((name: String?, scale: Float) -> Unit)? = null
+    var onSelectionChanged: ((name: String?, scale: Float, centreY: Float) -> Unit)? = null
 
     private var selected: Control? = null
 
     private fun select(control: Control?) {
         if (selected === control) return
         selected = control
-        onSelectionChanged?.invoke(control?.editName, control?.sizeScale ?: ControlScale.DEFAULT)
+        announceSelection()
         invalidate()
+    }
+
+    /**
+     * Tell the editor what is selected, how big it is, and where it sits.
+     *
+     * The position is what lets the panel move to the opposite side of the screen, so it is
+     * never covering the control whose size it is about to change. [NO_SELECTION] rather than a
+     * nullable float, so the panel has one thing to test.
+     */
+    private fun announceSelection() {
+        val control = selected
+        onSelectionChanged?.invoke(
+            control?.editName,
+            control?.sizeScale ?: ControlScale.DEFAULT,
+            control?.cy ?: NO_SELECTION,
+        )
     }
 
     /** Resize the selected control. Does nothing when nothing is selected. */
@@ -1071,7 +1087,7 @@ class ControllerView @JvmOverloads constructor(
     fun resetSelectedControlSize() {
         val control = selected ?: return
         control.sizeScale = ControlScale.DEFAULT
-        onSelectionChanged?.invoke(control.editName, control.sizeScale)
+        announceSelection()
         invalidate()
     }
 
@@ -1098,7 +1114,7 @@ class ControllerView @JvmOverloads constructor(
         relayout()
         // relayout() rebuilt every control, so the one that was selected now holds the layout's
         // own size again; tell the editor so its slider agrees with what is on screen.
-        selected?.let { onSelectionChanged?.invoke(it.editName, it.sizeScale) }
+        announceSelection()
         invalidate()
     }
 
@@ -1983,5 +1999,10 @@ class ControllerView @JvmOverloads constructor(
             return
         }
         listener?.onTouchStateChanged()
+    }
+
+    companion object {
+        /** Reported as the selected control's position when nothing is selected. */
+        const val NO_SELECTION = -1f
     }
 }

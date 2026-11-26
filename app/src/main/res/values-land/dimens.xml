@@ -34,4 +34,8 @@
     <dimen name="sheet_header_pad_v">5dp</dimen>
     <dimen name="sheet_handle_top">6dp</dimen>
     <dimen name="sheet_handle_bottom">5dp</dimen>
+
+    <!-- The layout editor's panel: how far its edges sit from the screen's. -->
+    <dimen name="edit_panel_margin_h">170dp</dimen>
+    <dimen name="edit_panel_margin_v">8dp</dimen>
 </resources>

@@ -9,60 +9,97 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
 
+    <!--
+      The layout editor's panel.
+
+      Every child that can grow is weighted or capped, so the panel fits any screen at any font
+      scale. It did not: the size row asked for about 450dp on a ~360dp portrait screen, and a
+      horizontal LinearLayout with no weights squeezes the last child — so RESET SIZE was given
+      almost no width, wrapped its text to one letter per line, and that tall thin button is
+      what made the panel cover half the screen.
+
+      Width and side come from resources: full width at the bottom in portrait, where nothing
+      sits; narrower and at the top in landscape, clear of the triggers at both edges. It also
+      moves itself to the opposite side from whatever is selected, and can be dragged anywhere
+      by the handle.
+    -->
     <LinearLayout
         android:id="@+id/editBar"
-        android:layout_width="wrap_content"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_gravity="center_horizontal|top"
-        android:layout_marginTop="40dp"
+        android:layout_gravity="bottom"
+        android:layout_marginStart="@dimen/edit_panel_margin_h"
+        android:layout_marginEnd="@dimen/edit_panel_margin_h"
+        android:layout_marginTop="@dimen/edit_panel_margin_v"
+        android:layout_marginBottom="@dimen/edit_panel_margin_v"
         android:orientation="vertical"
         android:background="@drawable/status_pill"
-        android:padding="6dp"
+        android:paddingStart="8dp"
+        android:paddingEnd="4dp"
+        android:paddingTop="2dp"
+        android:paddingBottom="2dp"
         android:visibility="gone">
 
-        <!--
-          Resizing. Always present in edit mode so the feature is discoverable, but inert until
-          a control is tapped — the prompt says what to do, and the slider is disabled so it
-          cannot be dragged with nothing to apply it to.
-        -->
         <LinearLayout
-            android:id="@+id/sizeRow"
-            android:layout_width="wrap_content"
+            android:id="@+id/sizeSection"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center_vertical"
-            android:paddingStart="8dp"
-            android:paddingEnd="4dp"
-            android:paddingBottom="2dp">
+            android:orientation="vertical">
 
-            <TextView
-                android:id="@+id/sizeLabel"
-                android:layout_width="wrap_content"
+            <LinearLayout
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:minWidth="150dp"
-                android:maxLines="1"
-                android:ellipsize="end"
-                android:textColor="@color/pp_text_dim"
-                android:textSize="12sp"
-                android:text="@string/edit_size_prompt" />
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
 
+                <TextView
+                    android:id="@+id/editDragHandle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:paddingStart="2dp"
+                    android:paddingEnd="8dp"
+                    android:paddingTop="4dp"
+                    android:paddingBottom="4dp"
+                    android:text="@string/edit_panel_handle"
+                    android:textColor="@color/pp_outline"
+                    android:textSize="15sp"
+                    android:contentDescription="@string/edit_panel_move" />
+
+                <TextView
+                    android:id="@+id/sizeLabel"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:maxLines="1"
+                    android:ellipsize="end"
+                    android:textColor="@color/pp_text_dim"
+                    android:textSize="12sp"
+                    android:text="@string/edit_size_prompt" />
+
+                <Button
+                    android:id="@+id/sizeReset"
+                    style="?android:attr/borderlessButtonStyle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:minWidth="0dp"
+                    android:paddingStart="10dp"
+                    android:paddingEnd="10dp"
+                    android:enabled="false"
+                    android:maxLines="1"
+                    android:textSize="12sp"
+                    android:textColor="@color/pp_text"
+                    android:text="@string/edit_size_reset" />
+            </LinearLayout>
+
+            <!-- Its own row, so the slider keeps a usable length on a narrow screen. -->
             <SeekBar
                 android:id="@+id/sizeSlider"
-                android:layout_width="170dp"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="8dp"
+                android:layout_marginStart="2dp"
+                android:layout_marginEnd="6dp"
                 android:enabled="false"
                 android:contentDescription="@string/edit_size_prompt" />
-
-            <Button
-                android:id="@+id/sizeReset"
-                style="?android:attr/borderlessButtonStyle"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:enabled="false"
-                android:textSize="12sp"
-                android:textColor="@color/pp_text"
-                android:text="@string/edit_size_reset" />
         </LinearLayout>
 
         <LinearLayout
@@ -71,29 +108,41 @@
             android:layout_gravity="center_horizontal"
             android:orientation="horizontal">
 
-        <Button
-            android:id="@+id/editSave"
-            style="?android:attr/borderlessButtonStyle"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:textColor="@color/pp_accent"
-            android:text="@string/edit_save" />
+            <Button
+                android:id="@+id/editSave"
+                style="?android:attr/borderlessButtonStyle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minWidth="0dp"
+                android:paddingStart="12dp"
+                android:paddingEnd="12dp"
+                android:maxLines="1"
+                android:textColor="@color/pp_accent"
+                android:text="@string/edit_save" />
 
-        <Button
-            android:id="@+id/editReset"
-            style="?android:attr/borderlessButtonStyle"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:textColor="@color/pp_text"
-            android:text="@string/edit_reset" />
+            <Button
+                android:id="@+id/editReset"
+                style="?android:attr/borderlessButtonStyle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minWidth="0dp"
+                android:paddingStart="12dp"
+                android:paddingEnd="12dp"
+                android:maxLines="1"
+                android:textColor="@color/pp_text"
+                android:text="@string/edit_reset" />
 
-        <Button
-            android:id="@+id/editCancel"
-            style="?android:attr/borderlessButtonStyle"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:textColor="@color/pp_text_dim"
-            android:text="@string/edit_cancel" />
+            <Button
+                android:id="@+id/editCancel"
+                style="?android:attr/borderlessButtonStyle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minWidth="0dp"
+                android:paddingStart="12dp"
+                android:paddingEnd="12dp"
+                android:maxLines="1"
+                android:textColor="@color/pp_text_dim"
+                android:text="@string/edit_cancel" />
         </LinearLayout>
     </LinearLayout>
 

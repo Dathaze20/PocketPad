@@ -61,7 +61,7 @@ class MainActivity : AppCompatActivity(),
     private lateinit var sizeLabel: android.widget.TextView
     private lateinit var sizeSlider: android.widget.SeekBar
     private lateinit var sizeReset: android.widget.Button
-    private lateinit var sizeRow: android.widget.LinearLayout
+    private lateinit var sizeSection: android.widget.LinearLayout
 
     /** The control the size slider is pointed at, or null when nothing is selected. */
     private var selectedControlName: String? = null
@@ -117,11 +117,14 @@ class MainActivity : AppCompatActivity(),
         sizeLabel = findViewById(R.id.sizeLabel)
         sizeSlider = findViewById(R.id.sizeSlider)
         sizeReset = findViewById(R.id.sizeReset)
-        sizeRow = findViewById(R.id.sizeRow)
+        sizeSection = findViewById(R.id.sizeSection)
+        setUpEditPanelDrag()
         controllerView.listener = this
 
         sizeSlider.max = ControlScale.SLIDER_STEPS
-        controllerView.onSelectionChanged = { name, scale -> showSelection(name, scale) }
+        controllerView.onSelectionChanged = { name, scale, centreY ->
+            showSelection(name, scale, centreY)
+        }
         sizeSlider.setOnSeekBarChangeListener(
             object : android.widget.SeekBar.OnSeekBarChangeListener {
                 override fun onProgressChanged(
@@ -500,8 +503,13 @@ class MainActivity : AppCompatActivity(),
      * is disabled — a slider that moves but changes nothing is worse than one that will not
      * move at all.
      */
-    private fun showSelection(name: String?, scale: Float) {
+    private fun showSelection(
+        name: String?,
+        scale: Float,
+        centreY: Float = ControllerView.NO_SELECTION,
+    ) {
         selectedControlName = name
+        moveEditPanelAwayFrom(centreY)
         sizeLabel.text = sizeLabelFor(name, scale)
         settingSliderFromCode = true
         sizeSlider.progress = ControlScale.toSlider(scale)
@@ -517,10 +525,90 @@ class MainActivity : AppCompatActivity(),
             getString(R.string.edit_size_value, name, ControlScale.percent(scale))
         }
 
+    /**
+     * Put the panel on the side of the screen the selected control is not on.
+     *
+     * Selecting a control to resize it and then not being able to see it is the obvious failure
+     * here, and the panel is large enough that it will cover something wherever it sits. So it
+     * takes the far side: a control in the top half sends the panel to the bottom, and the other
+     * way round. With nothing selected it goes to the side the layouts leave emptiest, which
+     * differs by orientation — see `bools.xml`.
+     *
+     * A manual drag is forgotten at this point, since the panel is being placed deliberately.
+     */
+    private fun moveEditPanelAwayFrom(centreY: Float) {
+        val params = editBar.layoutParams as? android.widget.FrameLayout.LayoutParams ?: return
+        val height = controllerView.height
+        val atBottom = when {
+            centreY < 0f || height <= 0 -> resources.getBoolean(R.bool.edit_panel_at_bottom)
+            else -> centreY < height / 2f
+        }
+        val gravity =
+            if (atBottom) android.view.Gravity.BOTTOM else android.view.Gravity.TOP
+        // Only when the side actually changes: otherwise every RESET SIZE would snap the panel
+        // back from wherever the user had dragged it.
+        if (params.gravity != gravity) {
+            params.gravity = gravity
+            editBar.layoutParams = params
+            editBar.translationX = 0f
+            editBar.translationY = 0f
+        }
+    }
+
+    /**
+     * Let the panel be dragged out of the way by its handle.
+     *
+     * Moving it to the far side covers the common case, but not every one: in landscape the top
+     * strip holds VIEW, MENU and the gear, and a control cannot be selected while the panel is
+     * over it, so there has to be a way to shift the panel without selecting anything first.
+     *
+     * Only the handle drags, so the slider and the buttons keep their own touches.
+     */
+    @SuppressLint("ClickableViewAccessibility")
+    private fun setUpEditPanelDrag() {
+        val handle = findViewById<android.widget.TextView>(R.id.editDragHandle)
+        var downX = 0f
+        var downY = 0f
+        var startX = 0f
+        var startY = 0f
+        handle.setOnTouchListener { _, event ->
+            when (event.actionMasked) {
+                android.view.MotionEvent.ACTION_DOWN -> {
+                    downX = event.rawX
+                    downY = event.rawY
+                    startX = editBar.translationX
+                    startY = editBar.translationY
+                    true
+                }
+
+                android.view.MotionEvent.ACTION_MOVE -> {
+                    val parentWidth = (editBar.parent as android.view.View).width
+                    val parentHeight = (editBar.parent as android.view.View).height
+                    // Clamped so the panel can be moved aside but never off the screen, which
+                    // would take SAVE and CANCEL with it.
+                    val maxX = ((parentWidth - editBar.width) / 2f).coerceAtLeast(0f)
+                    val slackY = (parentHeight - editBar.height).coerceAtLeast(0).toFloat()
+                    // Which way it can travel depends on the edge it is anchored to: a panel
+                    // held to the bottom can only move up, and one held to the top only down.
+                    val anchoredBottom =
+                        (editBar.layoutParams as android.widget.FrameLayout.LayoutParams)
+                            .gravity and android.view.Gravity.BOTTOM == android.view.Gravity.BOTTOM
+                    val lowY = if (anchoredBottom) -slackY else 0f
+                    val highY = if (anchoredBottom) 0f else slackY
+                    editBar.translationX = (startX + event.rawX - downX).coerceIn(-maxX, maxX)
+                    editBar.translationY = (startY + event.rawY - downY).coerceIn(lowY, highY)
+                    true
+                }
+
+                else -> true
+            }
+        }
+    }
+
     private fun startLayoutEdit() {
         controllerView.enterLayoutEditMode()
         showSelection(null, ControlScale.DEFAULT)
-        sizeRow.visibility = android.view.View.VISIBLE
+        sizeSection.visibility = android.view.View.VISIBLE
         editBar.visibility = android.view.View.VISIBLE
         statusView.visibility = android.view.View.GONE
         Toast.makeText(this, R.string.edit_hint, Toast.LENGTH_LONG).show()
@@ -635,7 +723,8 @@ class MainActivity : AppCompatActivity(),
     private fun startBackgroundPan() {
         controllerView.enterBackgroundPanMode()
         // The same bar is reused to frame a picture, where there is no control to resize.
-        sizeRow.visibility = android.view.View.GONE
+        sizeSection.visibility = android.view.View.GONE
+        moveEditPanelAwayFrom(ControllerView.NO_SELECTION)
         editBar.visibility = android.view.View.VISIBLE
         statusView.visibility = android.view.View.GONE
         Toast.makeText(this, R.string.bg_hint, Toast.LENGTH_LONG).show()

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Landscape: the top. The bottom holds the d-pad, both sticks and the stick-click buttons, so a
+  panel there covers the controls that matter most; the top strip holds only VIEW, MENU and the
+  gear. Those three can still be reached by dragging the panel aside.
+-->
+<resources>
+    <bool name="edit_panel_at_bottom">false</bool>
+</resources>
