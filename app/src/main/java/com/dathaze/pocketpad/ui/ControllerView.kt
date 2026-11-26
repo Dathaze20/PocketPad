@@ -12,6 +12,7 @@ import android.graphics.RectF
 import android.graphics.Shader
 import kotlin.math.max
 import android.os.SystemClock
+import android.util.TypedValue
 import android.util.AttributeSet
 import android.view.MotionEvent
 import android.view.View
@@ -1249,6 +1250,91 @@ class ControllerView @JvmOverloads constructor(
         c.radius = r
     }
 
+    private fun dp(value: Float) = value * resources.displayMetrics.density
+
+    private fun sp(value: Float) =
+        TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, value, resources.displayMetrics)
+
+    /**
+     * How far down the screen the status pill reaches.
+     *
+     * The pill is a separate view drawn on top of this one, so controls near the top sit behind
+     * it. Its height follows the user's font scale, which is why this is measured in sp rather
+     * than assumed: at a large font setting it is roughly twice as tall as at the default, and
+     * anything placed under the old fixed guess ended up half-hidden.
+     *
+     * Mirrors the status view in `activity_main.xml` — 6dp of margin, one 12sp line, and 4dp of
+     * padding above and below — plus a little clearance.
+     */
+    private val statusPillBottom: Float
+        get() = dp(6f) + sp(12f) * 1.3f + dp(8f) + dp(6f)
+
+    /** Radius for every shoulder and trigger, never under 48dp across. */
+    private fun triggerRadius(unit: Float): Float =
+        ControlGeometry.triggerRadius(unit, resources.displayMetrics.density)
+
+    /**
+     * Place a pair of triggers on one side of the screen, outboard button first.
+     *
+     * Spacing is derived from the radius rather than from fixed fractions of the width, so the
+     * gap between LT and LB survives any size they are given. Placing them by fraction is what
+     * let them grow into each other.
+     */
+    private fun placeTriggerPair(
+        outer: Control,
+        inner: Control,
+        w: Float,
+        y: Float,
+        r: Float,
+        leftSide: Boolean,
+    ) {
+        val density = resources.displayMetrics.density
+        val margin = ControlGeometry.triggerMargin(w, r, density)
+        val step = ControlGeometry.triggerStep(r, density)
+        if (leftSide) {
+            place(outer, margin, y, r)
+            place(inner, margin + step, y, r)
+        } else {
+            place(outer, w - margin, y, r)
+            place(inner, w - margin - step, y, r)
+        }
+    }
+
+    /** A single shoulder on one side, at the same outboard position a pair's outer button gets. */
+    private fun placeSingleTrigger(c: Control, w: Float, y: Float, r: Float, leftSide: Boolean) {
+        val margin = ControlGeometry.triggerMargin(w, r, resources.displayMetrics.density)
+        place(c, if (leftSide) margin else w - margin, y, r)
+    }
+
+    /**
+     * Where the trigger row sits in portrait: below the status pill, because the pill spans most
+     * of a portrait screen's width and would otherwise cover the triggers.
+     */
+    private fun triggerRowPortrait(h: Float, r: Float): Float =
+        max(h * 0.075f, statusPillBottom + r)
+
+    /**
+     * Where the trigger row sits in landscape. The pill is centred and the triggers are out at
+     * the edges, so they do not meet; this only has to keep them fully on screen.
+     */
+    private fun triggerRowLandscape(h: Float, r: Float): Float = max(h * 0.088f, r + dp(6f))
+
+    /**
+     * The settings gear, top centre under the status pill.
+     *
+     * It used to sit in the bottom-left corner, which is exactly where a left thumb rests while
+     * playing — easy to open the menu by accident mid-game. Top centre is the one part of the
+     * screen no thumb occupies, and it is beside the status pill, which is the other thing you
+     * look up to check.
+     *
+     * [clearOf] is the lowest edge of anything already placed in the middle of the top strip,
+     * so the gear can be put under it.
+     */
+    private fun placeGearTopCentre(w: Float, h: Float, r: Float, clearOf: Float = 0f) {
+        val y = max(statusPillBottom + r + dp(6f), clearOf + r + dp(12f))
+        place(gear, w * 0.5f, y, r)
+    }
+
     // ------------------------------------------------------------ PS layouts
     // The top ~8% of the safe area stays empty for the status pill, and no
     // control sits inside another's halo — spacing modeled on a real pad.
@@ -1257,10 +1343,10 @@ class ControllerView @JvmOverloads constructor(
         val unit = min(w, h * 0.46f)
         val small = unit * 0.072f
         val face = unit * 0.078f
-        place(btnL1, w * 0.10f, h * 0.10f, small)
-        place(btnL2, w * 0.26f, h * 0.10f, small)
-        place(btnR2, w * 0.74f, h * 0.10f, small)
-        place(btnR1, w * 0.90f, h * 0.10f, small)
+        val trigger = triggerRadius(unit)
+        val triggerY = triggerRowPortrait(h, trigger)
+        placeTriggerPair(btnL1, btnL2, w, triggerY, trigger, leftSide = true)
+        placeTriggerPair(btnR1, btnR2, w, triggerY, trigger, leftSide = false)
         place(dpad, w * 0.26f, h * 0.28f, unit * 0.19f)
         val fx = w * 0.74f
         val fy = h * 0.28f
@@ -1276,7 +1362,7 @@ class ControllerView @JvmOverloads constructor(
         place(btnShare, w * 0.24f, h * 0.79f, small)
         place(btnHome, w * 0.50f, h * 0.79f, small * 1.2f)
         place(btnOptions, w * 0.76f, h * 0.79f, small)
-        place(gear, w * 0.08f, h * 0.92f, small * 0.9f)
+        placeGearTopCentre(w, h, small * 0.9f, clearOf = triggerY + trigger)
     }
 
     private fun layoutPsLandscape(w: Float, h: Float) {
@@ -1285,10 +1371,10 @@ class ControllerView @JvmOverloads constructor(
         val face = unit * 0.090f
         // Shoulders sit outboard of the clusters below them rather than
         // directly on top, so R1 does not stack over the top face button.
-        place(btnL2, w * 0.048f, h * 0.112f, small)
-        place(btnL1, w * 0.125f, h * 0.112f, small)
-        place(btnR1, w * 0.875f, h * 0.112f, small)
-        place(btnR2, w * 0.952f, h * 0.112f, small)
+        val trigger = triggerRadius(unit)
+        val triggerY = triggerRowLandscape(h, trigger)
+        placeTriggerPair(btnL2, btnL1, w, triggerY, trigger, leftSide = true)
+        placeTriggerPair(btnR2, btnR1, w, triggerY, trigger, leftSide = false)
         place(dpad, w * 0.155f, h * 0.55f, unit * 0.205f)
         val fx = w * 0.845f
         val fy = h * 0.55f
@@ -1304,7 +1390,7 @@ class ControllerView @JvmOverloads constructor(
         place(btnShare, w * 0.38f, h * 0.22f, small)
         place(btnHome, w * 0.50f, h * 0.44f, small * 1.2f)
         place(btnOptions, w * 0.62f, h * 0.22f, small)
-        place(gear, w * 0.045f, h * 0.90f, small * 0.9f)
+        placeGearTopCentre(w, h, small * 0.9f)
     }
 
     // ---------------------------------------------------------- Touch layouts
@@ -1385,10 +1471,10 @@ class ControllerView @JvmOverloads constructor(
         val unit = min(w, h * 0.46f)
         val small = unit * 0.072f
         val face = unit * 0.078f
-        place(btnL2, w * 0.10f, h * 0.075f, small)
-        place(btnL1, w * 0.26f, h * 0.075f, small)
-        place(btnR1, w * 0.74f, h * 0.075f, small)
-        place(btnR2, w * 0.90f, h * 0.075f, small)
+        val trigger = triggerRadius(unit)
+        val triggerY = triggerRowPortrait(h, trigger)
+        placeTriggerPair(btnL2, btnL1, w, triggerY, trigger, leftSide = true)
+        placeTriggerPair(btnR2, btnR1, w, triggerY, trigger, leftSide = false)
         place(leftStick, w * 0.26f, h * 0.29f, unit * 0.15f)
         val fx = w * 0.74f
         val fy = h * 0.29f
@@ -1404,17 +1490,17 @@ class ControllerView @JvmOverloads constructor(
         place(btnShare, w * 0.26f, h * 0.79f, small)
         place(btnHome, w * 0.50f, h * 0.79f, small * 1.2f)
         place(btnOptions, w * 0.74f, h * 0.79f, small)
-        place(gear, w * 0.08f, h * 0.92f, small * 0.9f)
+        placeGearTopCentre(w, h, small * 0.9f, clearOf = triggerY + trigger)
     }
 
     private fun layoutXboxLandscape(w: Float, h: Float) {
         val unit = min(h, w * 0.46f)
         val small = unit * 0.072f
         val face = unit * 0.090f
-        place(btnL2, w * 0.048f, h * 0.088f, small)
-        place(btnL1, w * 0.125f, h * 0.088f, small)
-        place(btnR1, w * 0.875f, h * 0.088f, small)
-        place(btnR2, w * 0.952f, h * 0.088f, small)
+        val trigger = triggerRadius(unit)
+        val triggerY = triggerRowLandscape(h, trigger)
+        placeTriggerPair(btnL2, btnL1, w, triggerY, trigger, leftSide = true)
+        placeTriggerPair(btnR2, btnR1, w, triggerY, trigger, leftSide = false)
         place(leftStick, w * 0.155f, h * 0.47f, unit * 0.155f)
         val fx = w * 0.845f
         val fy = h * 0.53f
@@ -1430,7 +1516,7 @@ class ControllerView @JvmOverloads constructor(
         place(btnShare, w * 0.38f, h * 0.22f, small)
         place(btnHome, w * 0.50f, h * 0.44f, small * 1.2f)
         place(btnOptions, w * 0.62f, h * 0.22f, small)
-        place(gear, w * 0.045f, h * 0.90f, small * 0.9f)
+        placeGearTopCentre(w, h, small * 0.9f)
     }
 
     // ---------------------------------------------------------- SNES layouts
@@ -1439,8 +1525,10 @@ class ControllerView @JvmOverloads constructor(
         val unit = min(w, h * 0.46f)
         val small = unit * 0.076f
         val face = unit * 0.082f
-        place(btnL1, w * 0.12f, h * 0.10f, small)
-        place(btnR1, w * 0.88f, h * 0.10f, small)
+        val trigger = triggerRadius(unit)
+        val triggerY = triggerRowPortrait(h, trigger)
+        placeSingleTrigger(btnL1, w, triggerY, trigger, leftSide = true)
+        placeSingleTrigger(btnR1, w, triggerY, trigger, leftSide = false)
         place(dpad, w * 0.26f, h * 0.30f, unit * 0.20f)
         val fx = w * 0.74f
         val fy = h * 0.30f
@@ -1452,15 +1540,17 @@ class ControllerView @JvmOverloads constructor(
         place(btnShare, w * 0.28f, h * 0.56f, small)
         place(btnOptions, w * 0.72f, h * 0.56f, small)
         place(btnHome, w * 0.50f, h * 0.70f, small)
-        place(gear, w * 0.08f, h * 0.92f, small * 0.9f)
+        placeGearTopCentre(w, h, small * 0.9f, clearOf = triggerY + trigger)
     }
 
     private fun layoutSnesLandscape(w: Float, h: Float) {
         val unit = min(h, w * 0.46f)
         val small = unit * 0.076f
         val face = unit * 0.095f
-        place(btnL1, w * 0.09f, h * 0.14f, small)
-        place(btnR1, w * 0.91f, h * 0.14f, small)
+        val trigger = triggerRadius(unit)
+        val triggerY = triggerRowLandscape(h, trigger)
+        placeSingleTrigger(btnL1, w, triggerY, trigger, leftSide = true)
+        placeSingleTrigger(btnR1, w, triggerY, trigger, leftSide = false)
         place(dpad, w * 0.16f, h * 0.58f, unit * 0.22f)
         val fx = w * 0.84f
         val fy = h * 0.58f
@@ -1472,7 +1562,7 @@ class ControllerView @JvmOverloads constructor(
         place(btnShare, w * 0.38f, h * 0.24f, small)
         place(btnOptions, w * 0.62f, h * 0.24f, small)
         place(btnHome, w * 0.50f, h * 0.52f, small)
-        place(gear, w * 0.05f, h * 0.90f, small * 0.9f)
+        placeGearTopCentre(w, h, small * 0.9f)
     }
 
     // ------------------------------------------------- NES / Game Boy layouts
@@ -1488,7 +1578,7 @@ class ControllerView @JvmOverloads constructor(
         place(btnShare, w * 0.28f, h * 0.58f, small)
         place(btnOptions, w * 0.72f, h * 0.58f, small)
         place(btnHome, w * 0.50f, h * 0.71f, small)
-        place(gear, w * 0.08f, h * 0.92f, small * 0.9f)
+        placeGearTopCentre(w, h, small * 0.9f)
     }
 
     private fun layoutRetroLandscape(w: Float, h: Float) {
@@ -1501,7 +1591,7 @@ class ControllerView @JvmOverloads constructor(
         place(btnShare, w * 0.38f, h * 0.20f, small)
         place(btnOptions, w * 0.62f, h * 0.20f, small)
         place(btnHome, w * 0.50f, h * 0.48f, small)
-        place(gear, w * 0.05f, h * 0.90f, small * 0.9f)
+        placeGearTopCentre(w, h, small * 0.9f)
     }
 
     // --------------------------------------------------------------- drawing

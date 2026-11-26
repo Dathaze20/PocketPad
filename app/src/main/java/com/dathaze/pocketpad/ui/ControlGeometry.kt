@@ -3,6 +3,7 @@ package com.dathaze.pocketpad.ui
 import com.dathaze.pocketpad.hid.HidConstants
 import kotlin.math.atan2
 import kotlin.math.hypot
+import kotlin.math.max
 
 /**
  * The arithmetic behind the touch controls, kept out of [ControllerView] so it can be tested.
@@ -163,6 +164,55 @@ object ControlGeometry {
         if (travel <= 0f) return 255
         return Math.round(255f + (dragY / travel) * 255f).coerceIn(0, 255)
     }
+
+    // --------------------------------------------------- trigger size and spacing
+
+    /**
+     * The smallest comfortable touch target, in dp, from Android's accessibility guidance.
+     *
+     * The shoulders and triggers used to be sized purely as a fraction of the screen, with no
+     * floor at all, so on a short screen or at a large display size they came out under this and
+     * were genuinely awkward to hit. [triggerRadius] now treats it as a hard minimum.
+     */
+    const val MIN_TOUCH_TARGET_DP = 48f
+
+    /**
+     * Clear space kept between two neighbouring triggers, in dp.
+     *
+     * LT and LB were placed at fixed fractions of the screen width, which is independent of how
+     * big they are — so making them any larger ran them into each other. Spacing them by their
+     * own radius plus this gap means they cannot touch at any size.
+     */
+    const val TRIGGER_SPACING_DP = 14f
+
+    /** Trigger radius as a fraction of the layout unit, before the minimum is applied. */
+    const val TRIGGER_UNIT_FRACTION = 0.095f
+
+    /** Radius for a shoulder or trigger: scales with the screen, never below the minimum. */
+    fun triggerRadius(unit: Float, density: Float): Float {
+        val floor = MIN_TOUCH_TARGET_DP * density / 2f
+        return max(unit * TRIGGER_UNIT_FRACTION, floor)
+    }
+
+    /**
+     * Centre-to-centre distance between two triggers side by side.
+     *
+     * Not just a visible gap: it is at least wide enough that their *touch* areas do not
+     * intersect either. A control answers to a touch out to [HIT_SLOP] times its radius, so two
+     * of them clear each other only from `2 * HIT_SLOP * radius` apart. At the old fixed
+     * fractions LT and LB sat about 6dp apart on a phone — visibly separate, but with
+     * overlapping touch areas, so one of the two was harder to hit than it looked. That is
+     * exactly the complaint this answers, and [overlaps] agrees with it by construction.
+     */
+    fun triggerStep(radius: Float, density: Float): Float =
+        radius * 2f + max(TRIGGER_SPACING_DP * density, radius * (HIT_SLOP - 1f) * 2f)
+
+    /**
+     * How far the outermost trigger's centre sits from its edge of the screen — far enough in
+     * that the whole button is on screen with a margin, however large it has become.
+     */
+    fun triggerMargin(width: Float, radius: Float, density: Float): Float =
+        max(radius + TRIGGER_SPACING_DP * density, width * 0.055f)
 
     private const val CENTRE = 128
 }
