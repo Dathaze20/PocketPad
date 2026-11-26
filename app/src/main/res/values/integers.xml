@@ -6,4 +6,9 @@
 -->
 <resources>
     <integer name="settings_list_columns">1</integer>
+
+    <!-- How wide the layout editor's panel is, as a percentage of the screen.
+     Portrait: the full width. The panel sits at the bottom, where the default layouts put
+     nothing, so it has the whole width to itself. -->
+    <integer name="edit_panel_width_percent">100</integer>
 </resources>

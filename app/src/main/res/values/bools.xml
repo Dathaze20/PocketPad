@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Which side of the screen the layout editor's panel starts on.
+
+  Portrait: the bottom. The default layouts keep the lowest row of buttons around 79% of the
+  height, so a panel at the very bottom covers nothing, while the top is where the triggers are.
+-->
+<resources>
+    <bool name="edit_panel_at_bottom">true</bool>
+</resources>

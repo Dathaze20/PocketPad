@@ -41,7 +41,26 @@
     <string name="edit_save">SAVE</string>
     <string name="edit_reset">DEFAULT</string>
     <string name="edit_cancel">CANCEL</string>
-    <string name="edit_hint">Drag any button where you want it, then tap SAVE. DEFAULT puts everything back.</string>
+    <string name="edit_hint">Drag a button to move it, or tap one to resize it. SAVE keeps your changes; DEFAULT puts everything back.</string>
+
+    <!--
+      Resizing, inside Move buttons. The slider changes only the selected control, and the size
+      is saved alongside its position.
+    -->
+    <string name="edit_size_prompt">Tap to resize</string>
+    <string name="edit_size_value">%1$s · %2$d%%</string>
+    <string name="edit_size_reset">RESET SIZE</string>
+    <string name="edit_panel_handle" translatable="false">\u2630</string>
+    <string name="edit_panel_move">Drag to move this panel</string>
+    <string name="edit_size_was_reset">%1$s back to its default size</string>
+
+    <!-- What the editor calls controls that carry no printed label of their own. -->
+    <string name="edit_name_control">Button</string>
+    <string name="edit_name_dpad">D-pad</string>
+    <string name="edit_name_left_stick">Left stick</string>
+    <string name="edit_name_right_stick">Right stick</string>
+    <string name="edit_name_settings">Settings</string>
+    <string name="edit_name_move_stick">Move stick</string>
     <string name="edit_saved">Layout saved</string>
     <plurals name="edit_saved_overlap">
         <item quantity="one">Layout saved — %1$d pair of buttons overlaps. The nearer one wins, so the other is harder to hit. RESET restores the default layout.</item>

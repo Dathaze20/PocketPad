@@ -16,11 +16,13 @@ import android.util.TypedValue
 import android.util.AttributeSet
 import android.view.MotionEvent
 import android.view.View
+import android.view.ViewConfiguration
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.sin
+import com.dathaze.pocketpad.R
 import com.dathaze.pocketpad.hid.GamepadState
 import com.dathaze.pocketpad.hid.HidConstants
 import kotlin.math.atan2
@@ -96,9 +98,30 @@ class ControllerView @JvmOverloads constructor(
     private abstract inner class Control {
         var cx = 0f
         var cy = 0f
-        var radius = 0f
+
+        /** The size this control's layout gave it, before the user's own sizing. */
+        var baseRadius = 0f
+
+        /**
+         * The user's size for this control, from the slider in the layout editor.
+         *
+         * Separate from [baseRadius] so the two survive each other: the layout is recomputed
+         * from scratch on every rotation and skin change, and folding the user's choice into
+         * the radius would mean either losing it or compounding it each time.
+         */
+        var sizeScale = ControlScale.DEFAULT
+            set(value) {
+                field = ControlScale.clamp(value)
+            }
+
+        /** What everything else uses: the layout's size, scaled by the user's choice. */
+        val radius: Float get() = baseRadius * sizeScale
+
         var pointerId = -1
         val pressed: Boolean get() = pointerId != -1
+
+        /** What the layout editor calls this control when it is selected. */
+        open val editName: String get() = context.getString(R.string.edit_name_control)
 
         /**
          * Whether this control only takes touches no other control wanted.
@@ -216,6 +239,8 @@ class ControllerView @JvmOverloads constructor(
         val rimmed: Boolean = false,
         val isHome: Boolean = false
     ) : Control() {
+        override val editName: String get() = label
+
         private val longPressRunnable = Runnable {
             if (linkState != LinkState.CONNECTED) {
                 haptics.press()
@@ -336,6 +361,8 @@ class ControllerView @JvmOverloads constructor(
      * to alter how the Xbox or PlayStation sticks behave.
      */
     private inner class FloatingMoveStick : Control() {
+        override val editName: String get() = context.getString(R.string.edit_name_move_stick)
+
         private var originX = 0f
         private var originY = 0f
         private var knobX = 0f
@@ -466,6 +493,8 @@ class ControllerView @JvmOverloads constructor(
 
     /** A button that holds one d-pad direction, for quick-slot selection in the touch style. */
     private inner class HatButton(var label: String, private val direction: Int) : Control() {
+        override val editName: String get() = label
+
         override fun onDown(x: Float, y: Float) {
             touchState.hat = direction
             notifyChanged()
@@ -492,6 +521,8 @@ class ControllerView @JvmOverloads constructor(
 
     /** Eight-way d-pad driving the HID hat switch. */
     private inner class Dpad : Control() {
+        override val editName: String get() = context.getString(R.string.edit_name_dpad)
+
         override fun onDown(x: Float, y: Float) {
             update(x, y, first = true)
         }
@@ -648,6 +679,11 @@ class ControllerView @JvmOverloads constructor(
 
     /** Analog stick driving one axis pair. */
     private inner class Stick(val isLeft: Boolean) : Control() {
+        override val editName: String
+            get() = context.getString(
+                if (isLeft) R.string.edit_name_left_stick else R.string.edit_name_right_stick
+            )
+
         private var knobX = 0f
         private var knobY = 0f
 
@@ -767,6 +803,8 @@ class ControllerView @JvmOverloads constructor(
 
     /** Settings gear — opens the connection/skin menu instead of sending input. */
     private inner class GearButton : Control() {
+        override val editName: String get() = context.getString(R.string.edit_name_settings)
+
         override fun onDown(x: Float, y: Float) {
             haptics.press()
         }
@@ -848,6 +886,9 @@ class ControllerView @JvmOverloads constructor(
     private val textColor = Color.parseColor("#E8E9F0")
     private val dimTextColor = Color.parseColor("#8A8FA8")
     private val accentColor = Color.parseColor("#6C79FF")
+
+    /** Ring round the control the layout editor's size slider is currently pointed at. */
+    private val selectionColor = Color.parseColor("#39E58C")
 
     // PS face colors
     private val psTriangleColor = Color.parseColor("#2ECC71")
@@ -999,6 +1040,57 @@ class ControllerView @JvmOverloads constructor(
     fun enterLayoutEditMode() {
         releaseAllPointers()
         isEditingLayout = true
+        select(null)
+        invalidate()
+    }
+
+    /**
+     * Told when the selected control changes, so the editor can show its name and size.
+     *
+     * Null means nothing is selected — on entering edit mode, or after a tap on empty space.
+     */
+    var onSelectionChanged: ((name: String?, scale: Float, centreY: Float) -> Unit)? = null
+
+    private var selected: Control? = null
+
+    private fun select(control: Control?) {
+        if (selected === control) return
+        selected = control
+        announceSelection()
+        invalidate()
+    }
+
+    /**
+     * Tell the editor what is selected, how big it is, and where it sits.
+     *
+     * The position is what lets the panel move to the opposite side of the screen, so it is
+     * never covering the control whose size it is about to change. [NO_SELECTION] rather than a
+     * nullable float, so the panel has one thing to test.
+     */
+    private fun announceSelection() {
+        val control = selected
+        onSelectionChanged?.invoke(
+            control?.editName,
+            control?.sizeScale ?: ControlScale.DEFAULT,
+            control?.cy ?: NO_SELECTION,
+        )
+    }
+
+    /** Where the selected control sits, or [NO_SELECTION] when nothing is selected. */
+    fun selectedControlCentreY(): Float = selected?.cy ?: NO_SELECTION
+
+    /** Resize the selected control. Does nothing when nothing is selected. */
+    fun setSelectedControlScale(scale: Float) {
+        val control = selected ?: return
+        control.sizeScale = scale
+        invalidate()
+    }
+
+    /** Put the selected control back to the size its layout gives it. */
+    fun resetSelectedControlSize() {
+        val control = selected ?: return
+        control.sizeScale = ControlScale.DEFAULT
+        announceSelection()
         invalidate()
     }
 
@@ -1007,12 +1099,15 @@ class ControllerView @JvmOverloads constructor(
         val w = safeWidth()
         val h = safeHeight()
         if (w > 0 && h > 0) {
-            val serialized = controlKeys.entries.joinToString(";") { (key, c) ->
-                "$key:${(c.cx - offX) / w}:${(c.cy - offY) / h}"
-            }
+            val serialized = LayoutStore.encode(
+                controlKeys.entries.map { (key, c) ->
+                    LayoutStore.Placement(key, (c.cx - offX) / w, (c.cy - offY) / h, c.sizeScale)
+                }
+            )
             layoutPrefs.edit().putString(layoutPrefKey(), serialized).apply()
         }
         isEditingLayout = false
+        select(null)
         invalidate()
     }
 
@@ -1020,12 +1115,16 @@ class ControllerView @JvmOverloads constructor(
     fun resetLayoutToDefault() {
         layoutPrefs.edit().remove(layoutPrefKey()).apply()
         relayout()
+        // relayout() rebuilt every control, so the one that was selected now holds the layout's
+        // own size again; tell the editor so its slider agrees with what is on screen.
+        announceSelection()
         invalidate()
     }
 
     /** Exit without saving; reload whatever was stored (or the default). */
     fun cancelLayoutEdit() {
         isEditingLayout = false
+        select(null)
         relayout()
         invalidate()
     }
@@ -1045,14 +1144,11 @@ class ControllerView @JvmOverloads constructor(
         val saved = layoutPrefs.getString(layoutPrefKey(), null) ?: return
         val w = safeWidth()
         val h = safeHeight()
-        for (entry in saved.split(';')) {
-            val parts = entry.split(':')
-            if (parts.size != 3) continue
-            val control = controlKeys[parts[0]] ?: continue
-            val fx = parts[1].toFloatOrNull() ?: continue
-            val fy = parts[2].toFloatOrNull() ?: continue
-            control.cx = offX + fx * w
-            control.cy = offY + fy * h
+        for (placement in LayoutStore.decode(saved)) {
+            val control = controlKeys[placement.key] ?: continue
+            control.cx = offX + placement.fx * w
+            control.cy = offY + placement.fy * h
+            control.sizeScale = placement.scale
         }
     }
 
@@ -1247,7 +1343,10 @@ class ControllerView @JvmOverloads constructor(
     private fun place(c: Control, x: Float, y: Float, r: Float) {
         c.cx = offX + x
         c.cy = offY + y
-        c.radius = r
+        c.baseRadius = r
+        // Back to the layout's own size; applySavedLayout puts the user's choice back on top,
+        // exactly as it does for the position.
+        c.sizeScale = ControlScale.DEFAULT
     }
 
     private fun dp(value: Float) = value * resources.displayMetrics.density
@@ -1627,6 +1726,16 @@ class ControllerView @JvmOverloads constructor(
                 canvas.drawCircle(control.cx, control.cy, control.radius * 1.08f, strokePaint)
             }
             strokePaint.alpha = 255
+            // The selected control gets a second, heavier ring, so it is obvious which one the
+            // size slider is about to change.
+            selected?.let { control ->
+                val ringWidth = strokePaint.strokeWidth
+                strokePaint.strokeWidth = ringWidth * 2.5f
+                strokePaint.color = selectionColor
+                canvas.drawCircle(control.cx, control.cy, control.radius * 1.22f, strokePaint)
+                strokePaint.strokeWidth = ringWidth
+                strokePaint.color = accentColor
+            }
         }
     }
 
@@ -1778,15 +1887,36 @@ class ControllerView @JvmOverloads constructor(
     }
 
     /** In edit mode, fingers drag controls instead of pressing them. */
+    // Where each finger went down in edit mode, and whether it has travelled far enough to
+    // count as a drag. A tap selects a control so it can be resized; a drag moves it.
+    private val editDownX = HashMap<Int, Float>()
+    private val editDownY = HashMap<Int, Float>()
+    private val editDragging = HashSet<Int>()
+
+    private val editSlop: Float
+        get() = ViewConfiguration.get(context).scaledTouchSlop.toFloat()
+
+    private fun forgetEditPointer(id: Int) {
+        editDownX.remove(id)
+        editDownY.remove(id)
+        editDragging.remove(id)
+    }
+
     private fun handleEditTouch(event: MotionEvent) {
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_DOWN -> {
                 val index = event.actionIndex
+                val id = event.getPointerId(index)
                 val x = event.getX(index)
                 val y = event.getY(index)
+                editDownX[id] = x
+                editDownY[id] = y
+                editDragging.remove(id)
                 val control = pickControlAt(x, y)
-                if (control != null) {
-                    control.pointerId = event.getPointerId(index)
+                // The camera surface is the whole screen: it can be neither moved nor selected,
+                // or every tap on empty space would land on it.
+                if (control != null && !control.claimsLeftovers) {
+                    control.pointerId = id
                     haptics.tick()
                     invalidate()
                 }
@@ -1795,10 +1925,21 @@ class ControllerView @JvmOverloads constructor(
             MotionEvent.ACTION_MOVE -> {
                 for (i in 0 until event.pointerCount) {
                     val id = event.getPointerId(i)
+                    val x = event.getX(i)
+                    val y = event.getY(i)
+                    if (id !in editDragging) {
+                        val dx = x - (editDownX[id] ?: x)
+                        val dy = y - (editDownY[id] ?: y)
+                        // Nothing moves until the finger has travelled far enough to mean it;
+                        // otherwise a tap meant as "select this" nudges the control on its way
+                        // up, and every selection would quietly shift the layout.
+                        if (hypot(dx.toDouble(), dy.toDouble()) <= editSlop) continue
+                        editDragging.add(id)
+                    }
                     val control = activeControls.firstOrNull { it.pointerId == id } ?: continue
-                    control.cx = event.getX(i)
+                    control.cx = x
                         .coerceIn(safeLeft + control.radius, width - safeRight - control.radius)
-                    control.cy = event.getY(i)
+                    control.cy = y
                         .coerceIn(safeTop + control.radius, height - safeBottom - control.radius)
                 }
                 invalidate()
@@ -1807,9 +1948,17 @@ class ControllerView @JvmOverloads constructor(
             MotionEvent.ACTION_POINTER_UP, MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                 if (event.actionMasked == MotionEvent.ACTION_CANCEL) {
                     for (control in activeControls) control.pointerId = -1
+                    editDownX.clear()
+                    editDownY.clear()
+                    editDragging.clear()
                 } else {
                     val id = event.getPointerId(event.actionIndex)
-                    activeControls.firstOrNull { it.pointerId == id }?.pointerId = -1
+                    val control = activeControls.firstOrNull { it.pointerId == id }
+                    control?.pointerId = -1
+                    // A finger that never travelled is a tap: select what was under it, or
+                    // clear the selection when it landed on nothing.
+                    if (id !in editDragging) select(control)
+                    forgetEditPointer(id)
                 }
                 invalidate()
             }
@@ -1853,5 +2002,10 @@ class ControllerView @JvmOverloads constructor(
             return
         }
         listener?.onTouchStateChanged()
+    }
+
+    companion object {
+        /** Reported as the selected control's position when nothing is selected. */
+        const val NO_SELECTION = -1f
     }
 }
