@@ -6,4 +6,9 @@
 -->
 <resources>
     <bool name="edit_panel_at_bottom">false</bool>
+
+    <!--
+  Landscape: there is room for the device name beside the title, so the pill names it.
+    -->
+    <bool name="sheet_status_shows_device">true</bool>
 </resources>

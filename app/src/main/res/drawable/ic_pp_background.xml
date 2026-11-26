@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  A framed picture.
+
+  Drawn white and tinted at the point of use, so one drawable serves both the dark
+  glyph on a coloured tile and the light glyph on a grey one.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="1.8"
+        android:strokeLineJoin="round"
+        android:strokeLineCap="butt"
+        android:pathData="M3,5h18v14H3z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M8.2,9.6a1.5,1.5 0 1,0 0.01,0z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M5.2,17.2l4.3,-5.2 2.9,3.4 2.4,-2.8 4,4.6z" />
+</vector>

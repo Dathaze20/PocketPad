@@ -105,6 +105,7 @@
     <string name="sheet_logo_glyph" translatable="false">P</string>
     <string name="sheet_chevron" translatable="false">\u203A</string>
     <string name="sheet_status_connected">Connected \u00B7 %1$s</string>
+    <string name="sheet_status_connected_short">Connected</string>
     <string name="sheet_status_disconnected">Not connected</string>
     <string name="sheet_group_connection">Connection</string>
     <string name="sheet_group_controller">Controller</string>

@@ -9,7 +9,7 @@
 <resources>
     <dimen name="row_min_height">42dp</dimen>
     <dimen name="row_icon">28dp</dimen>
-    <dimen name="row_icon_text">14sp</dimen>
+    <dimen name="row_icon_pad">5dp</dimen>
     <dimen name="row_label_text">13sp</dimen>
     <dimen name="row_subtitle_text">10.5sp</dimen>
     <dimen name="row_value_text">11.5sp</dimen>

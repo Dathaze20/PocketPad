@@ -14,7 +14,7 @@
     <!-- Row -->
     <dimen name="row_min_height">48dp</dimen>
     <dimen name="row_icon">32dp</dimen>
-    <dimen name="row_icon_text">15sp</dimen>
+    <dimen name="row_icon_pad">6dp</dimen>
     <dimen name="row_label_text">14sp</dimen>
     <dimen name="row_subtitle_text">11sp</dimen>
     <dimen name="row_value_text">12sp</dimen>

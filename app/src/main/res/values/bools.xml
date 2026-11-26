@@ -7,4 +7,10 @@
 -->
 <resources>
     <bool name="edit_panel_at_bottom">true</bool>
+
+    <!--
+  Portrait: the pill says only "Connected". The device name is already spelled out on the
+  status banner above the sheet, and repeating it there is what truncated the app's own name.
+    -->
+    <bool name="sheet_status_shows_device">false</bool>
 </resources>

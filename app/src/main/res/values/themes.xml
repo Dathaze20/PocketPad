@@ -6,6 +6,33 @@
         <item name="android:navigationBarColor">@color/pp_background</item>
         <item name="colorAccent">@color/pp_accent</item>
         <item name="android:colorBackground">@color/pp_background</item>
+        <!--
+          Every AlertDialog the app builds goes through AlertDialog.Builder(context) with no
+          theme of its own, so they all inherit this one. Setting it here rather than at each
+          call site is what makes the updater dialog, the style picker, the vibration picker,
+          the paired-device list, the background menu and the help text match each other.
+        -->
+        <item name="alertDialogTheme">@style/Theme.PocketPad.Dialog</item>
+    </style>
+
+    <!--
+      Dialogs. AppCompat's own dark dialog is a flat mid-grey that belongs to no particular app;
+      this puts them on the same surface colour, outline and accent as everything else.
+    -->
+    <style name="Theme.PocketPad.Dialog" parent="Theme.AppCompat.Dialog.Alert">
+        <item name="android:windowBackground">@drawable/dialog_bg</item>
+        <item name="android:backgroundDimAmount">0.55</item>
+        <item name="colorAccent">@color/pp_accent</item>
+        <item name="android:textColorPrimary">@color/pp_text</item>
+        <item name="android:textColorSecondary">@color/pp_text_dim</item>
+        <item name="android:textColorAlertDialogListItem">@color/pp_text</item>
+        <item name="textColorAlertDialogListItem">@color/pp_text</item>
+        <item name="buttonBarButtonStyle">@style/Widget.PocketPad.DialogButton</item>
+    </style>
+
+    <!-- Dialog buttons in the app's accent rather than the platform's. -->
+    <style name="Widget.PocketPad.DialogButton" parent="Widget.AppCompat.Button.Borderless.Colored">
+        <item name="android:textColor">@color/pp_accent</item>
     </style>
 
     <!--

@@ -31,16 +31,13 @@
     android:paddingTop="@dimen/row_pad_v"
     android:paddingBottom="@dimen/row_pad_v">
 
-    <TextView
+    <ImageView
         android:id="@+id/rowIcon"
         android:layout_width="@dimen/row_icon"
         android:layout_height="@dimen/row_icon"
         android:background="@drawable/icon_tile"
-        android:gravity="center"
-        android:textColor="@color/pp_text"
-        android:textSize="@dimen/row_icon_text"
-        android:maxLines="1"
-        android:includeFontPadding="false"
+        android:padding="@dimen/row_icon_pad"
+        android:scaleType="fitCenter"
         android:importantForAccessibility="no" />
 
     <LinearLayout

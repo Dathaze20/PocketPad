@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  A keyboard, since TV menu keys send key presses rather than pad buttons.
+
+  Drawn white and tinted at the point of use, so one drawable serves both the dark
+  glyph on a coloured tile and the light glyph on a grey one.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="1.8"
+        android:strokeLineJoin="round"
+        android:strokeLineCap="butt"
+        android:pathData="M3,6.5h18v11H3z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M5.8,9.3h1.6v1.6h-1.6zM9,9.3h1.6v1.6H9zM12.2,9.3h1.6v1.6h-1.6zM15.4,9.3h1.6v1.6h-1.6zM5.8,12.4h1.6v1.6h-1.6zM9,12.4h1.6v1.6H9zM12.2,12.4h1.6v1.6h-1.6zM15.4,12.4h1.6v1.6h-1.6z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M7.4,15.1h9.2v1.4H7.4z" />
+</vector>

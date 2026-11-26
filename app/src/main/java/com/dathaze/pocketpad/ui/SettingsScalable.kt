@@ -3,6 +3,7 @@ package com.dathaze.pocketpad.ui
 import android.content.Context
 import android.util.AttributeSet
 import android.util.TypedValue
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.appcompat.widget.AppCompatTextView
@@ -36,7 +37,7 @@ class SettingsRowView @JvmOverloads constructor(
     defStyleAttr: Int = 0,
 ) : LinearLayout(context, attrs, defStyleAttr), SettingsScalable {
 
-    private lateinit var icon: TextView
+    private lateinit var icon: ImageView
     private lateinit var label: TextView
     private lateinit var subtitle: TextView
     private lateinit var value: TextView
@@ -44,7 +45,7 @@ class SettingsRowView @JvmOverloads constructor(
     private lateinit var chevron: TextView
 
     private var naturalIcon = 0
-    private var naturalIconText = 0f
+    private var naturalIconPad = 0
     private var naturalLabelText = 0f
     private var naturalSubtitleText = 0f
     private var naturalValueText = 0f
@@ -66,7 +67,7 @@ class SettingsRowView @JvmOverloads constructor(
         chevron = findViewById(R.id.rowChevron)
 
         naturalIcon = icon.layoutParams.height
-        naturalIconText = icon.textSize
+        naturalIconPad = icon.paddingTop
         naturalLabelText = label.textSize
         naturalSubtitleText = subtitle.textSize
         naturalValueText = value.textSize
@@ -88,7 +89,10 @@ class SettingsRowView @JvmOverloads constructor(
         }
         // Pixels, not scaled pixels: the natural sizes were read after inflation, so the user's
         // font scale is already in them and setting sp here would apply it a second time.
-        icon.setTextSize(TypedValue.COMPLEX_UNIT_PX, naturalIconText * scale)
+        // The glyph is a vector inset from its tile, so the inset scales with the tile and the
+        // drawing inside keeps its proportions.
+        val pad = (naturalIconPad * scale).roundToInt()
+        icon.setPadding(pad, pad, pad, pad)
         label.setTextSize(TypedValue.COMPLEX_UNIT_PX, naturalLabelText * scale)
         subtitle.setTextSize(TypedValue.COMPLEX_UNIT_PX, naturalSubtitleText * scale)
         value.setTextSize(TypedValue.COMPLEX_UNIT_PX, naturalValueText * scale)
