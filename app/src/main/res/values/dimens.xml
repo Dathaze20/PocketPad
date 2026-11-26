@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Settings list metrics — portrait, one column.
+
+  Tighter than the first version of this list all round: a shorter minimum row, less padding
+  above and below the text, and section headings a size smaller. None of it is decoration — on a
+  phone at a large font scale that saved height is the difference between the whole list being
+  on screen and the last two rows being below the fold.
+
+  These are the *natural* sizes. SettingsListView shrinks everything together, from these, when
+  an even larger font scale would still push the list past the bottom of the screen.
+-->
+<resources>
+    <!-- Row -->
+    <dimen name="row_min_height">48dp</dimen>
+    <dimen name="row_icon">32dp</dimen>
+    <dimen name="row_icon_text">15sp</dimen>
+    <dimen name="row_label_text">14sp</dimen>
+    <dimen name="row_subtitle_text">11sp</dimen>
+    <dimen name="row_value_text">12sp</dimen>
+    <dimen name="row_value_max">110dp</dimen>
+    <dimen name="row_badge_text">10sp</dimen>
+    <dimen name="row_chevron_text">15sp</dimen>
+    <dimen name="row_pad_h">12dp</dimen>
+    <dimen name="row_pad_v">5dp</dimen>
+    <dimen name="row_text_gap">11dp</dimen>
+
+    <!-- Section heading -->
+    <dimen name="heading_text">10sp</dimen>
+    <dimen name="heading_pad_h">14dp</dimen>
+    <dimen name="heading_pad_top">9dp</dimen>
+    <dimen name="heading_pad_bottom">3dp</dimen>
+
+    <!-- List and sheet -->
+    <dimen name="list_gap">10dp</dimen>
+    <dimen name="list_pad_h">4dp</dimen>
+    <dimen name="sheet_header_icon">34dp</dimen>
+    <dimen name="sheet_header_text">15sp</dimen>
+    <dimen name="sheet_status_text">11sp</dimen>
+    <dimen name="sheet_status_max">190dp</dimen>
+    <dimen name="sheet_header_pad_v">8dp</dimen>
+    <dimen name="sheet_handle_top">8dp</dimen>
+    <dimen name="sheet_handle_bottom">7dp</dimen>
+</resources>

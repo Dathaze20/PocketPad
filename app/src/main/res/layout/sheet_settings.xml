@@ -2,14 +2,21 @@
 <!--
   The settings sheet.
 
-  It replaces an AlertDialog.setItems() list of eleven equal-weight strings, which showed no
-  state, no grouping and no icons. The shell lives here; the rows are built in SettingsSheet.kt
-  so each one can carry its current value and so the list stays in one readable place.
+  The same list it has always been — icon, label, subtitle, chevron — in a SettingsListView,
+  which lays it out in one column in portrait and two side by side in landscape, and shrinks the
+  rows together if a large font scale would still push it past the bottom of the screen.
 
-  The height is capped in code rather than here, because on the Galaxy A17 in landscape the
-  whole sheet would otherwise be taller than the screen.
+  The header is one line. The title gives way before the connection state does: the title has
+  the layout weight, so when there is not enough room it is the one that ellipsizes, because
+  "PocketPad" is the least informative thing on the row and the name of the connected TV is the
+  most. Previously both were wrap_content, which meant neither would shrink and the status ran
+  off the right-hand edge.
+
+  The ScrollView is kept only as a safety net, for font scales past the point where shrinking
+  the rows further would make them unreadable.
 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="vertical"
@@ -18,77 +25,88 @@
 
     <!-- Grab handle: says "this came up from the bottom and can go back down". -->
     <View
-        android:layout_width="36dp"
+        android:layout_width="34dp"
         android:layout_height="4dp"
         android:layout_gravity="center_horizontal"
-        android:layout_marginTop="9dp"
-        android:layout_marginBottom="10dp"
+        android:layout_marginTop="@dimen/sheet_handle_top"
+        android:layout_marginBottom="@dimen/sheet_handle_bottom"
         android:background="@drawable/sheet_grab" />
 
-    <!--
-      Connection state, at the top, because it is the one thing someone opening this menu is
-      most likely to want to know and the old list did not show it anywhere.
-    -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
         android:gravity="center_vertical"
-        android:paddingStart="18dp"
-        android:paddingEnd="18dp"
-        android:paddingBottom="12dp">
+        android:baselineAligned="false"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp"
+        android:paddingBottom="@dimen/sheet_header_pad_v">
 
         <TextView
             android:id="@+id/sheetLogo"
-            android:layout_width="34dp"
-            android:layout_height="34dp"
+            android:layout_width="@dimen/sheet_header_icon"
+            android:layout_height="@dimen/sheet_header_icon"
             android:background="@drawable/icon_tile"
             android:backgroundTint="@color/pp_accent"
             android:gravity="center"
             android:text="@string/sheet_logo_glyph"
             android:textColor="@color/pp_background"
-            android:textSize="17sp"
+            android:textSize="16sp"
             android:textStyle="bold"
+            android:includeFontPadding="false"
             android:importantForAccessibility="no" />
 
-        <LinearLayout
+        <!--
+          Weight 1 and a width of 0: this is the part that gives way when the row is tight, so
+          the connection state beside it is never the thing that gets cut off.
+        -->
+        <TextView
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:layout_marginStart="11dp"
-            android:orientation="vertical">
+            android:layout_marginStart="10dp"
+            android:layout_marginEnd="8dp"
+            android:text="@string/app_name"
+            android:textColor="@color/pp_text"
+            android:textSize="@dimen/sheet_header_text"
+            android:textStyle="bold"
+            android:maxLines="1"
+            android:ellipsize="end"
+            android:includeFontPadding="false" />
+
+        <!--
+          Reports the live HID link, never a remembered pairing — see SettingsSheet. Capped and
+          ellipsized because a TV's advertised name can be very long.
+        -->
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:background="@drawable/status_pill"
+            android:paddingStart="9dp"
+            android:paddingEnd="10dp"
+            android:paddingTop="4dp"
+            android:paddingBottom="4dp">
+
+            <View
+                android:id="@+id/sheetStatusDot"
+                android:layout_width="7dp"
+                android:layout_height="7dp"
+                android:layout_marginEnd="6dp"
+                android:background="@drawable/status_dot" />
 
             <TextView
+                android:id="@+id/sheetStatusText"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="@string/app_name"
-                android:textColor="@color/pp_text"
-                android:textSize="16sp"
-                android:textStyle="bold" />
-
-            <LinearLayout
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:gravity="center_vertical"
-                android:layout_marginTop="2dp">
-
-                <View
-                    android:id="@+id/sheetStatusDot"
-                    android:layout_width="8dp"
-                    android:layout_height="8dp"
-                    android:layout_marginEnd="6dp"
-                    android:background="@drawable/status_dot" />
-
-                <TextView
-                    android:id="@+id/sheetStatusText"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:textColor="@color/pp_text_dim"
-                    android:textSize="12sp"
-                    tools:ignore="SelectableText"
-                    xmlns:tools="http://schemas.android.com/tools" />
-            </LinearLayout>
+                android:maxWidth="@dimen/sheet_status_max"
+                android:maxLines="1"
+                android:ellipsize="end"
+                android:textColor="@color/pp_text_dim"
+                android:textSize="@dimen/sheet_status_text"
+                android:includeFontPadding="false"
+                tools:ignore="SelectableText" />
         </LinearLayout>
     </LinearLayout>
 
@@ -97,13 +115,15 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:scrollbars="none"
+        android:overScrollMode="ifContentScrolls"
         android:fillViewport="false">
 
-        <LinearLayout
-            android:id="@+id/sheetRows"
+        <com.dathaze.pocketpad.ui.SettingsListView
+            android:id="@+id/sheetList"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:paddingBottom="4dp" />
+            android:paddingStart="@dimen/list_pad_h"
+            android:paddingEnd="@dimen/list_pad_h"
+            android:paddingBottom="2dp" />
     </ScrollView>
 </LinearLayout>

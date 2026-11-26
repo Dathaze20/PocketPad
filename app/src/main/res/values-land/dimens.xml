@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Settings list metrics — landscape, two columns.
+
+  A phone on its side has roughly 400dp of height and 900dp of width, so height is the scarce
+  thing and width is not. Everything vertical gets smaller; the text can afford to stay legible
+  because each of the two columns is still wider than the whole list is in portrait.
+-->
+<resources>
+    <dimen name="row_min_height">42dp</dimen>
+    <dimen name="row_icon">28dp</dimen>
+    <dimen name="row_icon_text">14sp</dimen>
+    <dimen name="row_label_text">13sp</dimen>
+    <dimen name="row_subtitle_text">10.5sp</dimen>
+    <dimen name="row_value_text">11.5sp</dimen>
+    <dimen name="row_value_max">130dp</dimen>
+    <dimen name="row_badge_text">9.5sp</dimen>
+    <dimen name="row_chevron_text">14sp</dimen>
+    <dimen name="row_pad_h">11dp</dimen>
+    <dimen name="row_pad_v">3dp</dimen>
+    <dimen name="row_text_gap">10dp</dimen>
+
+    <dimen name="heading_text">9.5sp</dimen>
+    <dimen name="heading_pad_h">13dp</dimen>
+    <dimen name="heading_pad_top">6dp</dimen>
+    <dimen name="heading_pad_bottom">2dp</dimen>
+
+    <dimen name="list_gap">12dp</dimen>
+    <dimen name="list_pad_h">6dp</dimen>
+    <dimen name="sheet_header_icon">28dp</dimen>
+    <dimen name="sheet_header_text">14sp</dimen>
+    <dimen name="sheet_status_text">10.5sp</dimen>
+    <dimen name="sheet_status_max">240dp</dimen>
+    <dimen name="sheet_header_pad_v">5dp</dimen>
+    <dimen name="sheet_handle_top">6dp</dimen>
+    <dimen name="sheet_handle_bottom">5dp</dimen>
+</resources>

@@ -1,37 +1,54 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
   One settings row: glyph tile, label with optional subtitle, and a trailing value, badge or
-  switch. 56dp tall so it clears the 48dp minimum touch target with room to spare.
+  switch.
+
+  Two things here exist to stop text breaking in the middle of a word, which is what a TextView
+  does when a single word is wider than the line it is on:
+
+  - Every text view is `maxLines="1"` with `ellipsize="end"`. One line cannot wrap, so it can
+    never break mid-word; a label too long for the space loses its tail to an ellipsis instead.
+  - `breakStrategy="simple"` and `hyphenationFrequency="none"`, so the layout never tries to be
+    clever about where to divide a word.
+
+  The height is a minimum rather than a fixed value. It was fixed at 56dp, which cannot survive
+  a large font scale — the text grows out of the box and is clipped. 48dp is the smallest
+  comfortable touch target, and the row grows past it when the text needs the room.
 -->
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<com.dathaze.pocketpad.ui.SettingsRowView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
-    android:layout_height="56dp"
+    android:layout_height="wrap_content"
+    android:minHeight="@dimen/row_min_height"
     android:orientation="horizontal"
     android:gravity="center_vertical"
     android:background="@drawable/row_bg"
     android:clickable="true"
     android:focusable="true"
-    android:paddingStart="14dp"
-    android:paddingEnd="14dp"
-    android:layout_marginStart="4dp"
-    android:layout_marginEnd="4dp">
+    android:paddingStart="@dimen/row_pad_h"
+    android:paddingEnd="@dimen/row_pad_h"
+    android:paddingTop="@dimen/row_pad_v"
+    android:paddingBottom="@dimen/row_pad_v">
 
     <TextView
         android:id="@+id/rowIcon"
-        android:layout_width="32dp"
-        android:layout_height="32dp"
+        android:layout_width="@dimen/row_icon"
+        android:layout_height="@dimen/row_icon"
         android:background="@drawable/icon_tile"
         android:gravity="center"
         android:textColor="@color/pp_text"
-        android:textSize="15sp"
+        android:textSize="@dimen/row_icon_text"
+        android:maxLines="1"
+        android:includeFontPadding="false"
         android:importantForAccessibility="no" />
 
     <LinearLayout
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_weight="1"
-        android:layout_marginStart="12dp"
-        android:layout_marginEnd="8dp"
+        android:layout_marginStart="@dimen/row_text_gap"
+        android:layout_marginEnd="6dp"
         android:orientation="vertical">
 
         <TextView
@@ -39,18 +56,25 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:textColor="@color/pp_text"
-            android:textSize="15sp"
-            android:maxLines="2"
-            android:ellipsize="end" />
+            android:textSize="@dimen/row_label_text"
+            android:maxLines="1"
+            android:ellipsize="end"
+            android:breakStrategy="simple"
+            android:hyphenationFrequency="none"
+            android:includeFontPadding="false" />
 
         <TextView
             android:id="@+id/rowSubtitle"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:layout_marginTop="1dp"
             android:textColor="@color/pp_text_dim"
-            android:textSize="11.5sp"
+            android:textSize="@dimen/row_subtitle_text"
             android:maxLines="1"
             android:ellipsize="end"
+            android:breakStrategy="simple"
+            android:hyphenationFrequency="none"
+            android:includeFontPadding="false"
             android:visibility="gone" />
     </LinearLayout>
 
@@ -59,8 +83,12 @@
         android:id="@+id/rowValue"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
+        android:maxWidth="@dimen/row_value_max"
         android:textColor="@color/pp_text_dim"
-        android:textSize="12.5sp"
+        android:textSize="@dimen/row_value_text"
+        android:maxLines="1"
+        android:ellipsize="end"
+        android:includeFontPadding="false"
         android:visibility="gone" />
 
     <TextView
@@ -68,13 +96,15 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:background="@drawable/badge_bg"
-        android:paddingStart="7dp"
-        android:paddingEnd="7dp"
-        android:paddingTop="2dp"
-        android:paddingBottom="2dp"
+        android:paddingStart="6dp"
+        android:paddingEnd="6dp"
+        android:paddingTop="1dp"
+        android:paddingBottom="1dp"
         android:textColor="#FFFFFFFF"
-        android:textSize="10.5sp"
+        android:textSize="@dimen/row_badge_text"
         android:textStyle="bold"
+        android:maxLines="1"
+        android:includeFontPadding="false"
         android:visibility="gone" />
 
     <Switch
@@ -84,16 +114,17 @@
         android:clickable="false"
         android:focusable="false"
         android:visibility="gone"
-        tools:ignore="UseSwitchCompatOrMaterialXml"
-        xmlns:tools="http://schemas.android.com/tools" />
+        tools:ignore="UseSwitchCompatOrMaterialXml" />
 
     <TextView
         android:id="@+id/rowChevron"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginStart="8dp"
+        android:layout_marginStart="5dp"
         android:text="@string/sheet_chevron"
         android:textColor="@color/pp_outline"
-        android:textSize="16sp"
+        android:textSize="@dimen/row_chevron_text"
+        android:maxLines="1"
+        android:includeFontPadding="false"
         android:importantForAccessibility="no" />
-</LinearLayout>
+</com.dathaze.pocketpad.ui.SettingsRowView>
