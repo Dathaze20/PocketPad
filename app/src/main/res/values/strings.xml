@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">PocketPad</string>
-    <string name="status_idle">Not connected — tap the gear to connect to your TV</string>
+    <string name="status_idle">Not connected — tap the gear</string>
     <string name="status_registering">Registering gamepad…</string>
     <string name="status_registered">Gamepad ready — waiting for a device</string>
     <string name="status_connecting">Connecting to %1$s…</string>
@@ -27,7 +27,7 @@
     <string name="haptics_off">Off</string>
     <string name="discoverable_hint">Pairing mode on — now pick this phone on your TV (Input Device Manager → Bluetooth Device List)</string>
     <string name="discoverable_declined">Pairing mode was not turned on — tap Allow when Android asks to make the phone visible</string>
-    <string name="status_discoverable">Visible to your TV — pair from the TV now</string>
+    <string name="status_discoverable">Visible — pair from your TV</string>
     <string name="action_edit_layout">Move buttons</string>
     <string name="action_background">Background picture</string>
     <string name="bg_choose">Choose a picture</string>

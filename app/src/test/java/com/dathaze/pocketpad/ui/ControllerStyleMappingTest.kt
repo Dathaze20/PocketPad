@@ -464,6 +464,28 @@ class ControllerStyleMappingTest {
         }
     }
 
+    /**
+     * Every control a layout positions, however it does it.
+     *
+     * Not every control is placed by a bare `place(...)` any more. The triggers go through
+     * helpers so their size and spacing are computed from each other rather than from fixed
+     * fractions of the screen, and the gear goes through one so it lands under the status pill.
+     * Those helpers are the placement, so they count here — otherwise this test would read as
+     * "the triggers are never positioned", which is the opposite of true.
+     */
+    private fun controlsPlacedIn(body: String): Set<String> {
+        val placed = mutableSetOf<String>()
+        Regex("""place\((\w+),""").findAll(body).forEach { placed += it.groupValues[1] }
+        Regex("""placeSingleTrigger\((\w+),""").findAll(body)
+            .forEach { placed += it.groupValues[1] }
+        Regex("""placeTriggerPair\((\w+),\s*(\w+),""").findAll(body).forEach {
+            placed += it.groupValues[1]
+            placed += it.groupValues[2]
+        }
+        if (body.contains("placeGearTopCentre(")) placed += "gear"
+        return placed
+    }
+
     @Test
     fun bothOrientationsPlaceEveryControlTheStyleShows() {
         val layoutFor = mapOf(
@@ -476,10 +498,11 @@ class ControllerStyleMappingTest {
                 val start = source.indexOf("private fun $fn(w: Float, h: Float)")
                 val end = source.indexOf("\n    }", start)
                 val body = source.substring(start, end)
-                val placed = Regex("""place\((\w+),""").findAll(body)
-                    .map { it.groupValues[1] }.toSet()
                 styleActive[style]!!.forEach { control ->
-                    assertTrue("$fn never places $control (shown by $style)", control in placed)
+                    assertTrue(
+                        "$fn never places $control (shown by $style)",
+                        control in controlsPlacedIn(body)
+                    )
                 }
             }
         }

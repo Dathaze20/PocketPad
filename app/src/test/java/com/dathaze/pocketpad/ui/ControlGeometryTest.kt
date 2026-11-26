@@ -246,4 +246,112 @@ class ControlGeometryTest {
         assertTrue(ControlGeometry.HIT_SLOP >= 1f)
         assertNotEquals(0f, ControlGeometry.TRIGGER_TRAVEL)
     }
+
+    // ------------------------------------------------- trigger size and spacing
+
+    /** Every density Android ships, from a cheap phone to a 4x flagship. */
+    private val densities = listOf(1f, 1.5f, 2f, 2.625f, 3f, 3.5f, 4f)
+
+    /** Layout units from a very small watch-sized screen up to a large tablet. */
+    private val units = listOf(120f, 200f, 320f, 360f, 411f, 600f, 900f)
+
+    /**
+     * The complaint that started this: the triggers were sized purely as a fraction of the
+     * screen, so on a short screen or at an enlarged display size they came out under Android's
+     * 48dp minimum and were genuinely awkward to hit.
+     */
+    @Test
+    fun aTriggerIsNeverSmallerThanTheMinimumTouchTarget() {
+        for (density in densities) {
+            for (unit in units) {
+                val diameter = ControlGeometry.triggerRadius(unit * density, density) * 2f
+                val dp = diameter / density
+                assertTrue(
+                    "a trigger came out ${dp}dp across at density $density, unit $unit",
+                    dp >= ControlGeometry.MIN_TOUCH_TARGET_DP - 0.01f
+                )
+            }
+        }
+    }
+
+    @Test
+    fun aTriggerStillGrowsWithTheScreenOnceItIsPastTheMinimum() {
+        val density = 3f
+        val small = ControlGeometry.triggerRadius(200f * density, density)
+        val large = ControlGeometry.triggerRadius(900f * density, density)
+        assertTrue("a bigger screen should give a bigger trigger", large > small)
+    }
+
+    /**
+     * Two triggers side by side must not merely look separate — their touch areas must not
+     * intersect, or one of them is harder to hit than it appears. This is the same
+     * [ControlGeometry.overlaps] test the layout editor warns with.
+     */
+    @Test
+    fun twoTriggersSideBySideNeverOverlap() {
+        for (density in densities) {
+            for (unit in units) {
+                val r = ControlGeometry.triggerRadius(unit * density, density)
+                val step = ControlGeometry.triggerStep(r, density)
+                assertFalse(
+                    "triggers overlap at density $density, unit $unit",
+                    ControlGeometry.overlaps(0f, 0f, r, step, 0f, r)
+                )
+            }
+        }
+    }
+
+    @Test
+    fun theGapBetweenTriggersIsVisibleNotJustTechnicallyClear() {
+        val density = 3f
+        val r = ControlGeometry.triggerRadius(360f * density, density)
+        val gapDp = (ControlGeometry.triggerStep(r, density) - 2 * r) / density
+        assertTrue("only ${gapDp}dp between triggers", gapDp >= ControlGeometry.TRIGGER_SPACING_DP)
+    }
+
+    /** However large a trigger gets, all of it stays on screen with room to spare. */
+    @Test
+    fun theOutermostTriggerIsAlwaysFullyOnScreen() {
+        for (density in densities) {
+            for (unit in units) {
+                val width = unit * density
+                val r = ControlGeometry.triggerRadius(width, density)
+                val margin = ControlGeometry.triggerMargin(width, r, density)
+                assertTrue(
+                    "the outer trigger hangs off the edge at density $density, unit $unit",
+                    margin - r > 0f
+                )
+                assertTrue(
+                    "the outer trigger hangs off the far edge at density $density, unit $unit",
+                    width - margin - r > 0f
+                )
+            }
+        }
+    }
+
+    /**
+     * A pair on one side has to stay on its own half, or the left triggers would run into the
+     * right ones across the middle of the screen.
+     *
+     * Checked from 320dp up, which is the narrowest screen Android phones actually come in. The
+     * width here is the layout unit, and the real layout always has at least that much width to
+     * work with — in portrait the unit is `min(width, height * 0.46)` and in landscape
+     * `min(height, width * 0.46)`, both of which are no wider than the screen — so this is a
+     * stricter test than the app ever faces.
+     */
+    @Test
+    fun aTriggerPairStaysOnItsOwnSideOfTheScreen() {
+        for (density in densities) {
+            for (unit in units.filter { it >= 320f }) {
+                val width = unit * density
+                val r = ControlGeometry.triggerRadius(width, density)
+                val inner = ControlGeometry.triggerMargin(width, r, density) +
+                    ControlGeometry.triggerStep(r, density)
+                assertTrue(
+                    "the inner trigger crosses the centre at density $density, unit $unit",
+                    inner + r <= width / 2f
+                )
+            }
+        }
+    }
 }
