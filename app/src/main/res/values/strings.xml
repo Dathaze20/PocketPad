@@ -7,7 +7,7 @@
     <string name="status_connecting">Connecting to %1$s…</string>
     <string name="status_connected">Connected to %1$s</string>
     <string name="status_disconnected">Disconnected</string>
-    <string name="status_bt_off">Bluetooth is off — turn it on and come back</string>
+    <string name="status_bt_off">Bluetooth is off — turn it on</string>
     <string name="status_unregistered">Gamepad dropped — reconnecting…</string>
     <string name="settings_title">PocketPad</string>
     <string name="action_connect_paired">Connect to a paired device</string>
