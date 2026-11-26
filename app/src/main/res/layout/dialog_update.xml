@@ -17,6 +17,7 @@
         android:id="@+id/update_message"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:textColor="@color/pp_text"
         android:textSize="16sp" />
 
     <ProgressBar
@@ -33,8 +34,8 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="12dp"
+        android:textColor="@color/pp_text_dim"
         android:textSize="13sp"
-        android:alpha="0.75"
         android:visibility="gone" />
 
 </LinearLayout>

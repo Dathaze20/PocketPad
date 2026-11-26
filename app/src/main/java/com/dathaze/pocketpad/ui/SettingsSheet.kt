@@ -10,6 +10,7 @@ import android.view.ViewGroup
 import android.view.ViewTreeObserver
 import android.view.Window
 import android.view.WindowManager
+import android.widget.ImageView
 import android.widget.ScrollView
 import android.widget.Switch
 import android.widget.TextView
@@ -182,7 +183,13 @@ class SettingsSheet(private val activity: Activity) {
         // Truthful by construction: this reads the live connection, not the pairing list.
         if (name != null) {
             dot.backgroundTintList = colour(R.color.pp_connected)
-            text.text = activity.getString(R.string.sheet_status_connected, name)
+            // Portrait drops the device name: it is already spelled out on the status banner
+            // above the sheet, and repeating it there pushed "PocketPad" into "Po...".
+            text.text = if (activity.resources.getBoolean(R.bool.sheet_status_shows_device)) {
+                activity.getString(R.string.sheet_status_connected, name)
+            } else {
+                activity.getString(R.string.sheet_status_connected_short)
+            }
         } else {
             dot.backgroundTintList = colour(R.color.pp_idle)
             text.text = activity.getString(R.string.sheet_status_disconnected)
@@ -202,40 +209,40 @@ class SettingsSheet(private val activity: Activity) {
 
         var connection = 3 // heading + connect + discoverable
         group(list, R.string.sheet_group_connection)
-        row(list, "⇄", Tint.CONNECTION, R.string.action_connect_paired,
+        row(list, R.drawable.ic_pp_connect, Tint.CONNECTION, R.string.action_connect_paired,
             subtitle = R.string.sheet_sub_connect) { host.onConnectToPaired() }
-        row(list, "◉", Tint.CONNECTION, R.string.action_discoverable,
+        row(list, R.drawable.ic_pp_discoverable, Tint.CONNECTION, R.string.action_discoverable,
             subtitle = R.string.sheet_sub_discoverable) { host.onMakeDiscoverable() }
         // Nothing to disconnect from means nothing to offer. Driven by the live HID link, so
         // the row appears and disappears with the connection rather than with a pairing.
         if (host.connectedDeviceName() != null) {
-            row(list, "⏻", Tint.DANGER, R.string.action_disconnect,
+            row(list, R.drawable.ic_pp_disconnect, Tint.DANGER, R.string.action_disconnect,
                 chevron = false) { host.onDisconnect() }
             connection++
         }
         groupSizes.add(connection)
 
         group(list, R.string.sheet_group_controller)
-        row(list, "⬡", Tint.CONTROLLER, R.string.action_skin,
+        row(list, R.drawable.ic_pp_style, Tint.CONTROLLER, R.string.action_skin,
             value = host.controllerStyleLabel()) { host.onChooseStyle() }
-        row(list, "✥", Tint.CONTROLLER, R.string.action_edit_layout) { host.onMoveButtons() }
-        row(list, "≈", Tint.CONTROLLER, R.string.action_haptics,
+        row(list, R.drawable.ic_pp_move, Tint.CONTROLLER, R.string.action_edit_layout) { host.onMoveButtons() }
+        row(list, R.drawable.ic_pp_vibration, Tint.CONTROLLER, R.string.action_haptics,
             value = host.vibrationLabel()) { host.onChooseVibration() }
-        row(list, "⌨", Tint.CONTROLLER, R.string.sheet_tv_menu_keys,
+        row(list, R.drawable.ic_pp_tvkeys, Tint.CONTROLLER, R.string.sheet_tv_menu_keys,
             subtitle = R.string.sheet_sub_tv_menu_keys,
             switchOn = host.tvMenuKeysOn(),
             chevron = false) { host.onToggleTvMenuKeys() }
         groupSizes.add(5)
 
         group(list, R.string.sheet_group_appearance)
-        row(list, "▦", Tint.APPEARANCE, R.string.action_background) { host.onBackgroundPicture() }
+        row(list, R.drawable.ic_pp_background, Tint.APPEARANCE, R.string.action_background) { host.onBackgroundPicture() }
         groupSizes.add(2)
 
         group(list, R.string.sheet_group_system)
-        row(list, "⇪", Tint.NEUTRAL, R.string.action_check_updates,
+        row(list, R.drawable.ic_pp_updates, Tint.NEUTRAL, R.string.action_check_updates,
             badge = host.pendingUpdateLabel()) { host.onCheckForUpdates() }
-        row(list, "⚙", Tint.NEUTRAL, R.string.action_bt_settings) { host.onBluetoothSettings() }
-        row(list, "?", Tint.NEUTRAL, R.string.action_help) { host.onHelp() }
+        row(list, R.drawable.ic_pp_bluetooth, Tint.NEUTRAL, R.string.action_bt_settings) { host.onBluetoothSettings() }
+        row(list, R.drawable.ic_pp_help, Tint.NEUTRAL, R.string.action_help) { host.onHelp() }
         groupSizes.add(4)
 
         list.setGroupSizes(groupSizes.toIntArray())
@@ -250,7 +257,7 @@ class SettingsSheet(private val activity: Activity) {
 
     private fun row(
         parent: SettingsListView,
-        glyph: String,
+        iconRes: Int,
         tint: Tint,
         labelRes: Int,
         subtitle: Int? = null,
@@ -263,16 +270,13 @@ class SettingsSheet(private val activity: Activity) {
         val view = LayoutInflater.from(activity)
             .inflate(R.layout.row_settings, parent, false) as SettingsRowView
 
-        view.findViewById<TextView>(R.id.rowIcon).apply {
-            text = glyph
+        view.findViewById<ImageView>(R.id.rowIcon).apply {
+            setImageResource(iconRes)
             backgroundTintList = colour(tint.colorRes)
             // The tinted tiles are strong colours; dark glyphs read better on them than light.
-            setTextColor(
-                ContextCompat.getColor(
-                    activity,
-                    if (tint == Tint.NEUTRAL) R.color.pp_text else R.color.pp_background
-                )
-            )
+            // The drawables are drawn white, so the tint is what decides which way round it is.
+            imageTintList =
+                colour(if (tint == Tint.NEUTRAL) R.color.pp_text else R.color.pp_background)
         }
         view.findViewById<TextView>(R.id.rowLabel).setText(labelRes)
 

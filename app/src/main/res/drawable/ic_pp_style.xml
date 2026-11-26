@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  A hexagon, keeping the shape the old text glyph used for controller style.
+
+  Drawn white and tinted at the point of use, so one drawable serves both the dark
+  glyph on a coloured tile and the light glyph on a grey one.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="2.0"
+        android:strokeLineJoin="round"
+        android:strokeLineCap="butt"
+        android:pathData="M16.5,4.21L21,12l-4.5,7.79h-9L3,12l4.5,-7.79z" />
+</vector>

@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Arrows to four sides: drag this where you want it.
+
+  Drawn white and tinted at the point of use, so one drawable serves both the dark
+  glyph on a coloured tile and the light glyph on a grey one.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M12,2l3.2,3.6h-6.4zM12,22l-3.2,-3.6h6.4zM2,12l3.6,-3.2v6.4zM22,12l-3.6,3.2v-6.4z" />
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="1.8"
+        android:strokeLineJoin="round"
+        android:strokeLineCap="butt"
+        android:pathData="M12,7.5v9M7.5,12h9" />
+</vector>
