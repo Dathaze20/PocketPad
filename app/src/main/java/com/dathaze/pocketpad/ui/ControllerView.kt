@@ -22,6 +22,7 @@ import androidx.core.view.WindowInsetsCompat
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.sin
+import com.dathaze.pocketpad.R
 import com.dathaze.pocketpad.hid.GamepadState
 import com.dathaze.pocketpad.hid.HidConstants
 import kotlin.math.atan2
