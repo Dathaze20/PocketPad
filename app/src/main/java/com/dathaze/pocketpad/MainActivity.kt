@@ -37,6 +37,7 @@ import com.dathaze.pocketpad.hid.BluetoothReadiness
 import com.dathaze.pocketpad.hid.GamepadState
 import com.dathaze.pocketpad.hid.HidConstants
 import com.dathaze.pocketpad.hid.HidGamepadManager
+import com.dathaze.pocketpad.ui.ControlScale
 import com.dathaze.pocketpad.ui.BackgroundImage
 import com.dathaze.pocketpad.ui.ControllerView
 import com.dathaze.pocketpad.ui.Haptics
@@ -57,6 +58,21 @@ class MainActivity : AppCompatActivity(),
     private lateinit var controllerView: ControllerView
     private lateinit var statusView: TextView
     private lateinit var editBar: android.widget.LinearLayout
+    private lateinit var sizeLabel: android.widget.TextView
+    private lateinit var sizeSlider: android.widget.SeekBar
+    private lateinit var sizeReset: android.widget.Button
+    private lateinit var sizeRow: android.widget.LinearLayout
+
+    /** The control the size slider is pointed at, or null when nothing is selected. */
+    private var selectedControlName: String? = null
+
+    /**
+     * True while the slider is being set from code rather than dragged.
+     *
+     * SeekBar fires onProgressChanged either way, and without this, moving the slider to match
+     * a newly selected control would be read as the user resizing it.
+     */
+    private var settingSliderFromCode = false
     private lateinit var hidManager: HidGamepadManager
     private lateinit var ds3Driver: Ds3UsbDriver
 
@@ -98,7 +114,40 @@ class MainActivity : AppCompatActivity(),
         controllerView = findViewById(R.id.controller)
         statusView = findViewById(R.id.status)
         editBar = findViewById(R.id.editBar)
+        sizeLabel = findViewById(R.id.sizeLabel)
+        sizeSlider = findViewById(R.id.sizeSlider)
+        sizeReset = findViewById(R.id.sizeReset)
+        sizeRow = findViewById(R.id.sizeRow)
         controllerView.listener = this
+
+        sizeSlider.max = ControlScale.SLIDER_STEPS
+        controllerView.onSelectionChanged = { name, scale -> showSelection(name, scale) }
+        sizeSlider.setOnSeekBarChangeListener(
+            object : android.widget.SeekBar.OnSeekBarChangeListener {
+                override fun onProgressChanged(
+                    bar: android.widget.SeekBar,
+                    progress: Int,
+                    fromUser: Boolean,
+                ) {
+                    if (settingSliderFromCode || !fromUser) return
+                    val scale = ControlScale.fromSlider(progress)
+                    controllerView.setSelectedControlScale(scale)
+                    sizeLabel.text = sizeLabelFor(selectedControlName, scale)
+                }
+
+                override fun onStartTrackingTouch(bar: android.widget.SeekBar) = Unit
+                override fun onStopTrackingTouch(bar: android.widget.SeekBar) = Unit
+            }
+        )
+        sizeReset.setOnClickListener {
+            val name = selectedControlName ?: return@setOnClickListener
+            controllerView.resetSelectedControlSize()
+            Toast.makeText(
+                this,
+                getString(R.string.edit_size_was_reset, name),
+                Toast.LENGTH_SHORT
+            ).show()
+        }
 
         findViewById<android.widget.Button>(R.id.editSave).setOnClickListener {
             if (controllerView.isPanningBackground) {
@@ -444,8 +493,34 @@ class MainActivity : AppCompatActivity(),
         flow.start()
     }
 
+    /**
+     * Show which control the slider will resize, and how big it currently is.
+     *
+     * A null name means nothing is selected, so the row says what to do instead and the slider
+     * is disabled — a slider that moves but changes nothing is worse than one that will not
+     * move at all.
+     */
+    private fun showSelection(name: String?, scale: Float) {
+        selectedControlName = name
+        sizeLabel.text = sizeLabelFor(name, scale)
+        settingSliderFromCode = true
+        sizeSlider.progress = ControlScale.toSlider(scale)
+        settingSliderFromCode = false
+        sizeSlider.isEnabled = name != null
+        sizeReset.isEnabled = name != null
+    }
+
+    private fun sizeLabelFor(name: String?, scale: Float): CharSequence =
+        if (name == null) {
+            getString(R.string.edit_size_prompt)
+        } else {
+            getString(R.string.edit_size_value, name, ControlScale.percent(scale))
+        }
+
     private fun startLayoutEdit() {
         controllerView.enterLayoutEditMode()
+        showSelection(null, ControlScale.DEFAULT)
+        sizeRow.visibility = android.view.View.VISIBLE
         editBar.visibility = android.view.View.VISIBLE
         statusView.visibility = android.view.View.GONE
         Toast.makeText(this, R.string.edit_hint, Toast.LENGTH_LONG).show()
@@ -559,6 +634,8 @@ class MainActivity : AppCompatActivity(),
 
     private fun startBackgroundPan() {
         controllerView.enterBackgroundPanMode()
+        // The same bar is reused to frame a picture, where there is no control to resize.
+        sizeRow.visibility = android.view.View.GONE
         editBar.visibility = android.view.View.VISIBLE
         statusView.visibility = android.view.View.GONE
         Toast.makeText(this, R.string.bg_hint, Toast.LENGTH_LONG).show()
