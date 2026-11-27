@@ -2,6 +2,8 @@
 
 ⭐ **If PocketPad is useful to you, please star this repo.** It helps other people find it. Want to support development? [Buy me a coffee](https://buymeacoffee.com/dathaze20j).
 
+<img src="docs/screenshots/controller.jpg" width="32%" alt="Controller"> <img src="docs/screenshots/resize.jpg" width="32%" alt="Resize buttons"> <img src="docs/screenshots/menu.jpg" width="32%" alt="Settings menu">
+
 **PocketPad turns an Android phone into a real Bluetooth HID gamepad.**
 
 The phone registers itself with Android's native `BluetoothHidDevice` API as a Bluetooth HID peripheral, so a TV, tablet, another phone, a PC — anything that accepts a Bluetooth controller — pairs with it the same way it would pair with a store-bought gamepad.
