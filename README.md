@@ -2,6 +2,8 @@
 
 ⭐ **If PocketPad is useful to you, please star this repo.** It helps other people find it. Want to support development? [Buy me a coffee](https://buymeacoffee.com/dathaze20j).
 
+🎮 **Also on itch.io:** [dathaze20.itch.io/pocketpad](https://dathaze20.itch.io/pocketpad). Same official build, with an optional donation if you want to support it.
+
 <img src="docs/screenshots/controller.jpg" width="32%" alt="Controller"> <img src="docs/screenshots/resize.jpg" width="32%" alt="Resize buttons"> <img src="docs/screenshots/menu.jpg" width="32%" alt="Settings menu">
 
 **PocketPad turns an Android phone into a real Bluetooth HID gamepad.**
