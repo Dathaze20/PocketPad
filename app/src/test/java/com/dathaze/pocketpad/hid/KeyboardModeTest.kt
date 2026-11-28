@@ -2,6 +2,7 @@ package com.dathaze.pocketpad.hid
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -71,10 +72,14 @@ class KeyboardModeTest {
 
     @Test
     fun switchingBetweenPcAndTvGoesThroughDistinctMappings() {
-        // The two modes are different mappings, not settings of one. ✕ is Enter on a TV menu
-        // and Z in a game; if those ever coincided, one of the two is broken.
+        // The two modes are different mappings, not settings of one. TV Keys can only ever put
+        // one key on ✕, and that key is Enter. PC Keys sends Enter *and* Z, so ✕ still confirms
+        // in a menu while also being bindable as a game button — something the single-key TV
+        // path cannot express at all.
         val cross = GamepadState().apply { setButton(HidConstants.BTN_CROSS, true) }
-        assertEquals(listOf(PcKeyMap.KEY_Z), PcKeyMap.keysFor(cross))
-        assertNotEquals(HidConstants.KEY_ENTER, PcKeyMap.keysFor(cross).single())
+        val sent = PcKeyMap.keysFor(cross)
+        assertEquals(2, sent.size)
+        assertTrue("PC Keys adds a game key TV Keys never sends", sent.contains(PcKeyMap.KEY_Z))
+        assertTrue("and keeps the confirm key", sent.contains(HidConstants.KEY_ENTER))
     }
 }

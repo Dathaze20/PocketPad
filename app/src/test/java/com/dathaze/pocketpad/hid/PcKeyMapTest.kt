@@ -26,7 +26,12 @@ class PcKeyMapTest {
 
     // ------------------------------------------------------- one button each
 
-    /** The mapping as the user was told it, one control at a time. */
+    /**
+     * Each control's own key, one control at a time.
+     *
+     * ✕ additionally carries Enter so it can confirm in an emulator's menus — asserted on its
+     * own below, since it is the one control that is deliberately not alone on a key.
+     */
     private val buttonKeys = listOf(
         HidConstants.BTN_CROSS to PcKeyMap.KEY_Z,
         HidConstants.BTN_CIRCLE to PcKeyMap.KEY_X,
@@ -45,11 +50,23 @@ class PcKeyMapTest {
     @Test
     fun everyButtonSendsItsOwnKey() {
         buttonKeys.forEach { (button, key) ->
-            assertEquals(
+            assertTrue(
                 "button $button should send key $key",
-                listOf(key),
-                keys { setButton(button, true) },
+                keys { setButton(button, true) }.contains(key),
             )
+        }
+    }
+
+    @Test
+    fun onlyCrossSendsMoreThanOneKey() {
+        buttonKeys.forEach { (button, key) ->
+            val sent = keys { setButton(button, true) }
+            val expected = if (button == HidConstants.BTN_CROSS) {
+                listOf(key, HidConstants.KEY_ENTER)
+            } else {
+                listOf(key)
+            }
+            assertEquals("button $button", expected, sent)
         }
     }
 
@@ -57,6 +74,59 @@ class PcKeyMapTest {
     fun noTwoControlsShareAKey() {
         val sent = buttonKeys.map { it.second }
         assertEquals("two controls map to the same key", sent.size, sent.distinct().size)
+    }
+
+    // ------------------------------------------------- ✕ confirms as well as jumps
+
+    /**
+     * ✕ carries Z *and* Enter.
+     *
+     * The first version of this mapping moved Enter to OPTIONS, which meant ✕ could no longer
+     * open anything in an emulator's own file browser — the very first thing a user hits. A
+     * report has six slots, so ✕ can be both the jump button to bind in a game and the confirm
+     * key every menu expects, without giving up either.
+     */
+    @Test
+    fun crossSendsBothItsGameKeyAndEnter() {
+        val sent = keys { setButton(HidConstants.BTN_CROSS, true) }
+        assertTrue("✕ must still be bindable as Z", sent.contains(PcKeyMap.KEY_Z))
+        assertTrue("✕ must confirm in menus", sent.contains(HidConstants.KEY_ENTER))
+    }
+
+    @Test
+    fun crossAndOptionsTogetherProduceOneEnter() {
+        // Two sources, one key: a duplicate keycode in two slots is not readable by a host.
+        val report = PcKeyMap.reportFor(state {
+            setButton(HidConstants.BTN_CROSS, true)
+            setButton(HidConstants.BTN_OPTIONS, true)
+        })
+        val held = KeyboardReport.keysOf(report)
+        assertEquals(
+            "Enter should occupy exactly one slot",
+            1,
+            held.count { it == HidConstants.KEY_ENTER },
+        )
+        assertTrue(held.contains(PcKeyMap.KEY_Z))
+    }
+
+    @Test
+    fun confirmingInAMenuWhileHoldingADirectionStillFits() {
+        // The menu case: a direction plus ✕ is three keys, far inside the six-slot limit.
+        val held = held {
+            hat = 4
+            setButton(HidConstants.BTN_CROSS, true)
+        }
+        assertTrue(held.contains(HidConstants.KEY_DOWN))
+        assertTrue(held.contains(PcKeyMap.KEY_Z))
+        assertTrue(held.contains(HidConstants.KEY_ENTER))
+    }
+
+    @Test
+    fun releasingCrossReleasesBothOfItsKeys() {
+        val s = state { setButton(HidConstants.BTN_CROSS, true) }
+        assertEquals(2, PcKeyMap.keysFor(s).size)
+        s.setButton(HidConstants.BTN_CROSS, false)
+        assertTrue(PcKeyMap.keysFor(s).isEmpty())
     }
 
     @Test
@@ -88,7 +158,10 @@ class PcKeyMapTest {
             setButton(HidConstants.BTN_CROSS, true)
         })
         assertEquals(KeyboardReport.MOD_RIGHT_SHIFT, KeyboardReport.modifiersOf(report))
-        assertEquals(listOf(PcKeyMap.KEY_Z), KeyboardReport.keysOf(report))
+        assertEquals(
+            listOf(PcKeyMap.KEY_Z, HidConstants.KEY_ENTER),
+            KeyboardReport.keysOf(report),
+        )
     }
 
     @Test
@@ -217,7 +290,7 @@ class PcKeyMapTest {
             setButton(HidConstants.BTN_CROSS, true)
         })
         assertEquals(
-            listOf(HidConstants.KEY_LEFT, PcKeyMap.KEY_Z).sorted(),
+            listOf(HidConstants.KEY_LEFT, PcKeyMap.KEY_Z, HidConstants.KEY_ENTER).sorted(),
             KeyboardReport.keysOf(report).sorted(),
         )
     }
@@ -299,7 +372,8 @@ class PcKeyMapTest {
             setButton(HidConstants.BTN_CROSS, true)
             setButton(HidConstants.BTN_SQUARE, true)
         }
-        assertEquals(2, PcKeyMap.keysFor(s).size)
+        // Z, A and ✕'s Enter.
+        assertEquals(3, PcKeyMap.keysFor(s).size)
 
         s.setButton(HidConstants.BTN_CROSS, false)
 
@@ -317,7 +391,10 @@ class PcKeyMapTest {
             setButton(HidConstants.BTN_CROSS, true)
         }
         s.hat = HidConstants.HAT_NEUTRAL
-        assertEquals(listOf(PcKeyMap.KEY_Z), PcKeyMap.keysFor(s))
+        assertEquals(
+            listOf(PcKeyMap.KEY_Z, HidConstants.KEY_ENTER),
+            PcKeyMap.keysFor(s),
+        )
     }
 
     @Test

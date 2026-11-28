@@ -18,7 +18,7 @@ package com.dathaze.pocketpad.hid
  *
  * | Control | Key | Control | Key |
  * |---|---|---|---|
- * | ✕ | `Z` | L1 | `Q` |
+ * | ✕ | `Z` + `Enter` | L1 | `Q` |
  * | ○ | `X` | R1 | `W` |
  * | □ | `A` | L2 | `E` |
  * | △ | `S` | R2 | `R` |
@@ -136,7 +136,20 @@ object PcKeyMap {
         if (triggerHeld(state, HidConstants.BTN_R2, state.rt)) keys += KEY_R
 
         // Everything else.
-        if (state.isPressed(HidConstants.BTN_OPTIONS)) keys += HidConstants.KEY_ENTER
+        //
+        // Enter comes from OPTIONS *and* from ✕. A report has six slots, so ✕ can carry Z and
+        // Enter at once: it stays the natural jump button to bind in a game, and it still
+        // confirms in the emulator's own menus — which is the first thing anyone hits, and
+        // which the first version of this mapping made impossible by moving Enter away from the
+        // button every menu expects it on. The two sources collapse to one key because
+        // [KeyboardReport.build] refuses a duplicate a slot.
+        //
+        // It sits here, near the end, on purpose: in a menu almost nothing else is held so it
+        // always fits, while in a busy moment it is among the first to be dropped to rollover
+        // rather than costing a direction or a face button.
+        if (state.isPressed(HidConstants.BTN_OPTIONS) || state.isPressed(HidConstants.BTN_CROSS)) {
+            keys += HidConstants.KEY_ENTER
+        }
         if (state.isPressed(HidConstants.BTN_L3)) keys += KEY_C
         if (state.isPressed(HidConstants.BTN_R3)) keys += KEY_V
         if (state.isPressed(HidConstants.BTN_PS)) keys += HidConstants.KEY_ESCAPE
