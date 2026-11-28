@@ -90,7 +90,9 @@ class SettingsSheetCompletenessTest {
         val declared = Regex("""fun (on[A-Z]\w*)\(""").findAll(sheet).map { it.groupValues[1] }.toSet()
         val expected = setOf(
             "onConnectToPaired", "onMakeDiscoverable", "onDisconnect",
-            "onChooseStyle", "onMoveButtons", "onChooseVibration", "onToggleTvMenuKeys",
+            // onToggleTvMenuKeys became onChooseKeyboardMode when the row gained a third
+            // option; the row is still there and still reached, it just picks instead of flips.
+            "onChooseStyle", "onMoveButtons", "onChooseVibration", "onChooseKeyboardMode",
             "onBackgroundPicture",
             "onCheckForUpdates", "onBluetoothSettings", "onHelp",
         )
