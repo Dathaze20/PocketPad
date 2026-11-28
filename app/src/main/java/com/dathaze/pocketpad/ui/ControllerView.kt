@@ -295,7 +295,114 @@ class ControllerView @JvmOverloads constructor(
             else -> false
         }
 
+        /**
+         * Draw this button as a rounded bar instead of a circle.
+         *
+         * Set by [applySkin] for the PlayStation skin's L1/L2/R1/R2 and cleared for every other
+         * skin, so the Xbox/SNES/NES/Game Boy shoulders keep the shape they have always had.
+         */
+        var pill = false
+
+        private var pillKeyX = Float.NaN
+        private var pillKeyY = Float.NaN
+        private var pillKeyR = Float.NaN
+        private var pillRaised: LinearGradient? = null
+        private var pillSunken: LinearGradient? = null
+        private var pillBevel: LinearGradient? = null
+
+        /** Same caching rule as the circular caps: shaders follow geometry, not frames. */
+        private fun ensurePillShaders(halfHeight: Float) {
+            if (cx == pillKeyX && cy == pillKeyY && radius == pillKeyR) return
+            pillKeyX = cx; pillKeyY = cy; pillKeyR = radius
+            pillRaised = LinearGradient(
+                cx, cy - halfHeight, cx, cy + halfHeight, capLit, capShade, Shader.TileMode.CLAMP
+            )
+            pillSunken = LinearGradient(
+                cx, cy - halfHeight, cx, cy + halfHeight, capPressedDeep, capPressedRise,
+                Shader.TileMode.CLAMP
+            )
+            // One gradient stroke does the job of the two arcs a circle needs: bright along the
+            // top edge, dark along the bottom, with the transition falling where the light would.
+            pillBevel = LinearGradient(
+                cx, cy - halfHeight, cx, cy + halfHeight,
+                withAlpha(Color.WHITE, 72), withAlpha(Color.BLACK, 120), Shader.TileMode.CLAMP
+            )
+        }
+
+        private fun pillRect(x: Float, y: Float, halfWidth: Float, halfHeight: Float) {
+            tmpRect.set(x - halfWidth, y - halfHeight, x + halfWidth, y + halfHeight)
+        }
+
+        private fun drawPill(canvas: Canvas) {
+            val halfWidth = ControlGeometry.PILL_HALF_WIDTH * radius
+            val halfHeight = ControlGeometry.PILL_HALF_HEIGHT * radius
+            ensurePillShaders(halfHeight)
+            val sink = if (pressed) halfHeight * 0.12f else 0f
+            val capY = cy + sink
+
+            if (pressed) {
+                glowPaint.color = accentColor
+                glowPaint.alpha = 70
+                val glowH = halfHeight * 1.34f
+                pillRect(cx, cy, halfWidth * 1.14f, glowH)
+                canvas.drawRoundRect(tmpRect, glowH, glowH, glowPaint)
+            }
+
+            // The socket the bar sits in.
+            moldPaint.shader = null
+            moldPaint.color = socketColor
+            val socketH = halfHeight * 1.24f
+            pillRect(cx, cy + halfHeight * 0.08f, halfWidth * 1.07f, socketH)
+            canvas.drawRoundRect(tmpRect, socketH, socketH, moldPaint)
+
+            // Cast shadow — only while the bar stands proud of the socket.
+            if (!pressed) {
+                moldPaint.color = withAlpha(Color.BLACK, 90)
+                pillRect(cx, capY + halfHeight * 0.17f, halfWidth * 0.99f, halfHeight)
+                canvas.drawRoundRect(tmpRect, halfHeight, halfHeight, moldPaint)
+            }
+
+            // The bar itself.
+            moldPaint.shader = if (pressed) pillSunken else pillRaised
+            pillRect(cx, capY, halfWidth, halfHeight)
+            canvas.drawRoundRect(tmpRect, halfHeight, halfHeight, moldPaint)
+            moldPaint.shader = null
+
+            // Bevelled edge.
+            bevelPaint.strokeWidth = halfHeight * 0.17f
+            bevelPaint.shader = pillBevel
+            val bevelH = halfHeight * 0.90f
+            pillRect(cx, capY, halfWidth * 0.95f, bevelH)
+            canvas.drawRoundRect(tmpRect, bevelH, bevelH, bevelPaint)
+            bevelPaint.shader = null
+
+            // Engraved label, same two-pass stamp as the round caps. Sized against the bar's
+            // height rather than the radius so "L1" never crowds the rounded ends.
+            textPaint.textSize = halfHeight * 0.92f * labelScale
+            val baseline = capY - (textPaint.ascent() + textPaint.descent()) / 2f
+            textPaint.color = withAlpha(Color.BLACK, 120)
+            canvas.drawText(label, cx, baseline + radius * 0.035f, textPaint)
+            textPaint.color = if (pressed) brighten(labelColor) else labelColor
+            canvas.drawText(label, cx, baseline, textPaint)
+        }
+
+        /**
+         * The circular hit area, plus the bar when there is one.
+         *
+         * A union, never a replacement: the circle is what guarantees the 48dp minimum target,
+         * so the bar can only add to it. The corners of a wide bar sit just outside the circle
+         * and would otherwise look pressable without being so.
+         */
+        override fun contains(x: Float, y: Float): Boolean {
+            if (super.contains(x, y)) return true
+            return pill && ControlGeometry.pillContains(x - cx, y - cy, radius)
+        }
+
         override fun draw(canvas: Canvas) {
+            if (pill) {
+                drawPill(canvas)
+                return
+            }
             val tint = if (rimmed) labelColor else accentColor
             if (isHome) drawHalo(canvas)
             if (pressed) {
@@ -1179,6 +1286,9 @@ class ControllerView @JvmOverloads constructor(
     }
 
     private fun applySkin() {
+        // Cleared for every skin and switched back on below for PlayStation only, so a skin
+        // added later cannot inherit the bar by forgetting to say otherwise.
+        btnL1.pill = false; btnL2.pill = false; btnR1.pill = false; btnR2.pill = false
         when (skin) {
             Skin.PS -> {
                 faceBottom.label = "✕"; faceBottom.labelColor = psCrossColor; faceBottom.labelScale = 1f
@@ -1188,6 +1298,8 @@ class ControllerView @JvmOverloads constructor(
                 btnL1.label = "L1"; btnR1.label = "R1"
                 btnL2.label = "L2"; btnR2.label = "R2"
                 btnL3.label = "L3"; btnR3.label = "R3"
+                // The four shoulder buttons are bars on this skin, like a real DualShock.
+                btnL1.pill = true; btnL2.pill = true; btnR1.pill = true; btnR2.pill = true
                 btnShare.label = "SHARE"; btnShare.labelScale = 0.38f
                 btnOptions.label = "OPTIONS"; btnOptions.labelScale = 0.3f
                 btnHome.label = "PS"

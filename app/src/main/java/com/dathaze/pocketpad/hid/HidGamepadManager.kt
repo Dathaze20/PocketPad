@@ -86,6 +86,13 @@ class HidGamepadManager(private val context: Context, private val listener: List
     /** Pending TV-menu keystrokes, kept in order and bounded for the same reasons. */
     private val keyQueue = KeyReportQueue()
 
+    /**
+     * PC Keys' multi-key reports. Separate from [keyQueue] on purpose — see [KeyboardReportQueue].
+     * Only one of the two is ever fed, because only one keyboard mode is active at a time, and
+     * [releaseAllKeys] drains both to neutral whenever that changes.
+     */
+    private val keyboardQueue = KeyboardReportQueue()
+
     /** Decides when the stack may be tried again. See [DrainPolicy] for why this is not a flag. */
     private val drainPolicy = DrainPolicy()
 
@@ -246,6 +253,36 @@ class HidGamepadManager(private val context: Context, private val listener: List
     }
 
     /**
+     * Send a full 8-byte keyboard report — PC Keys' equivalent of [sendKey], able to express
+     * several keys held at once. Build it with [PcKeyMap.reportFor] or [KeyboardReport.build].
+     *
+     * Same report id, same descriptor, same collection as [sendKey]. The only difference is that
+     * slots 2..6 can be occupied.
+     */
+    fun sendKeyReport(report: ByteArray) {
+        if (connectedDevice == null) return
+        keyboardQueue.offer(report)
+        if (drainPolicy.mayDrainNow()) drain()
+    }
+
+    /**
+     * Queue "nothing is held" on both keyboard paths.
+     *
+     * Called whenever the keyboard mode changes and when a link comes up. Switching away from a
+     * mode while a key is down would otherwise leave the host holding it with nothing left that
+     * would ever send the release — the mode that owned that key is no longer the one being fed.
+     *
+     * Both queues are used because the mode being left may be either one, and offering a neutral
+     * report to a queue that is already neutral is suppressed as a duplicate, so this is cheap.
+     */
+    fun releaseAllKeys() {
+        if (connectedDevice == null) return
+        keyQueue.offer(HidConstants.KEY_NONE)
+        keyboardQueue.offer(HidConstants.neutralKeyboardReport())
+        if (drainPolicy.mayDrainNow()) drain()
+    }
+
+    /**
      * Hand pending frames to the stack, oldest first, until it stops taking them.
      *
      * A refused frame is offered again on a short delay rather than dropped, and the queue caps
@@ -304,6 +341,26 @@ class HidGamepadManager(private val context: Context, private val listener: List
                 return
             }
         }
+
+        // PC Keys' multi-key reports. Same report id and collection as the loop above; only one
+        // of the two queues is ever non-empty, because only one keyboard mode feeds at a time.
+        while (true) {
+            val report = keyboardQueue.peek() ?: break
+            val accepted = try {
+                proxy.sendReport(device, HidConstants.REPORT_ID_KEYBOARD, report)
+            } catch (_: SecurityException) {
+                keyboardQueue.reset()
+                return
+            }
+            if (accepted) {
+                keyboardQueue.onSent()
+                continue
+            }
+            if (keyboardQueue.onFailed() == KeyboardReportQueue.Outcome.RETRY) {
+                scheduleDrain()
+                return
+            }
+        }
     }
 
     private fun scheduleDrain() {
@@ -315,6 +372,7 @@ class HidGamepadManager(private val context: Context, private val listener: List
     private fun resetDelivery() {
         queue.reset()
         keyQueue.reset()
+        keyboardQueue.reset()
         // Cancel the outstanding callback rather than just clearing the flag — leaving it
         // posted is the other half of how retries used to stack up.
         mainHandler.removeCallbacks(drainRetry)

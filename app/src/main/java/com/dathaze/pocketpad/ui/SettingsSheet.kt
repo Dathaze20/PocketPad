@@ -48,7 +48,7 @@ class SettingsSheet(private val activity: Activity) {
         fun connectedDeviceName(): String?
         fun controllerStyleLabel(): String
         fun vibrationLabel(): String
-        fun tvMenuKeysOn(): Boolean
+        fun keyboardModeLabel(): String
 
         /** Version string of a waiting update, or null when there is nothing to offer. */
         fun pendingUpdateLabel(): String?
@@ -59,7 +59,7 @@ class SettingsSheet(private val activity: Activity) {
         fun onChooseStyle()
         fun onMoveButtons()
         fun onChooseVibration()
-        fun onToggleTvMenuKeys()
+        fun onChooseKeyboardMode()
         fun onBackgroundPicture()
         fun onCheckForUpdates()
         fun onBluetoothSettings()
@@ -228,10 +228,11 @@ class SettingsSheet(private val activity: Activity) {
         row(list, R.drawable.ic_pp_move, Tint.CONTROLLER, R.string.action_edit_layout) { host.onMoveButtons() }
         row(list, R.drawable.ic_pp_vibration, Tint.CONTROLLER, R.string.action_haptics,
             value = host.vibrationLabel()) { host.onChooseVibration() }
-        row(list, R.drawable.ic_pp_tvkeys, Tint.CONTROLLER, R.string.sheet_tv_menu_keys,
+        // Was a switch while there were only two choices. PC Keys makes three, so it is a value
+        // row with a picker like Style and Vibration — same row, same icon, same group size.
+        row(list, R.drawable.ic_pp_tvkeys, Tint.CONTROLLER, R.string.sheet_keyboard_mode,
             subtitle = R.string.sheet_sub_tv_menu_keys,
-            switchOn = host.tvMenuKeysOn(),
-            chevron = false) { host.onToggleTvMenuKeys() }
+            value = host.keyboardModeLabel()) { host.onChooseKeyboardMode() }
         groupSizes.add(5)
 
         group(list, R.string.sheet_group_appearance)
