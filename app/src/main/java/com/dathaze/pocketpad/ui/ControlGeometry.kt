@@ -214,5 +214,38 @@ object ControlGeometry {
     fun triggerMargin(width: Float, radius: Float, density: Float): Float =
         max(radius + TRIGGER_SPACING_DP * density, width * 0.055f)
 
+    // ------------------------------------------------------- shoulder "pill"
+
+    /**
+     * The PlayStation skin draws L1/L2/R1/R2 as a rounded bar rather than a circle, the way the
+     * shoulder buttons on a real DualShock look. Only those four, and only on that skin.
+     *
+     * Both are multiples of the control's existing `radius`, which is deliberate: the radius
+     * still governs layout, spacing and the resize slider, so nothing about where these buttons
+     * sit or how big the user has made them changes — only how they are painted and, slightly,
+     * where they can be tapped.
+     *
+     * [PILL_HALF_WIDTH] is held at or below [HIT_SLOP] so the bar can never grow into the gap
+     * [triggerStep] keeps between two neighbouring triggers. Widening it past that would undo
+     * the spacing fix that stopped LT and LB from touching.
+     */
+    const val PILL_HALF_WIDTH = 1.12f
+    const val PILL_HALF_HEIGHT = 0.70f
+
+    /**
+     * Whether ([dx], [dy]) from the centre falls inside the drawn bar.
+     *
+     * A stadium: every point within [PILL_HALF_HEIGHT] of the horizontal segment through the
+     * centre. Used **in addition to** the circular hit test, never instead of it — the union can
+     * only ever make a button easier to hit, so the 48dp minimum target still holds.
+     */
+    fun pillContains(dx: Float, dy: Float, radius: Float): Boolean {
+        val halfWidth = PILL_HALF_WIDTH * radius
+        val halfHeight = PILL_HALF_HEIGHT * radius
+        val flat = max(0f, halfWidth - halfHeight)
+        val nearestX = dx.coerceIn(-flat, flat)
+        return hypot((dx - nearestX).toDouble(), dy.toDouble()) <= halfHeight
+    }
+
     private const val CENTRE = 128
 }

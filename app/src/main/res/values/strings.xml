@@ -70,7 +70,13 @@
     <string name="action_tv_nav_on">TV menu keys: ON — turn OFF to play</string>
     <string name="action_tv_nav_off">TV menu keys: OFF — turn ON to browse menus</string>
     <string name="tv_nav_enabled">TV menu keys on — d-pad moves menus, ✕/A selects, ○/B goes back. Turn this OFF before playing: in a game ○/B can prompt to quit.</string>
-    <string name="tv_nav_disabled">TV menu keys off — pure gamepad, best for playing</string>
+    <string name="tv_nav_disabled">Keyboard keys off — pure gamepad, best for playing</string>
+
+    <!-- Keyboard-mode picker. Longer text is fine here; these are dialog rows, not list labels. -->
+    <string name="keys_mode_off">Off — pure gamepad</string>
+    <string name="keys_mode_tv">TV menus — d-pad, ✕ selects, ○ back</string>
+    <string name="keys_mode_pc">PC keys (experimental) — for Windows emulators</string>
+    <string name="pc_keys_enabled">PC keys on — ✕=Z and Enter, ○=X, □=A, △=S, L1=Q, R1=W, L2=E, R2=R, SHARE=R-Shift, OPTIONS=Enter, L3=C, R3=V, PS=Esc, d-pad and left stick=arrows. ✕ confirms in menus and is your jump button; bind these in your emulator.</string>
     <string name="action_help">How to pair with my TV</string>
     <string name="help_text">Quick pairing: press and HOLD the PS/home button for a second — the ring around it pulses white while your phone is visible, and turns solid green once connected.\n\nPocketPad works with anything that accepts a Bluetooth gamepad: Smart TVs, phones, tablets, PCs — and the emulators running on them.\n\nSamsung TV: Settings → Connection → External Device Manager → Input Device Manager → Bluetooth Device List (or Settings → Sound → Bluetooth Device List on some models).\nPhone/tablet/PC: open its Bluetooth settings and scan for new devices.\n\n1. In PocketPad: tap “Make phone discoverable”.\n2. On the other device, select the name of your phone and confirm pairing on both screens.\n3. Once paired, it connects to PocketPad as a gamepad. Next time, use “Connect to a paired device” to reconnect instantly.\n\nEmulators (RetroArch etc.): PocketPad shows up as a normal gamepad — map the buttons once in the emulator’s input settings.\n\nPS3 controller: plug it into the phone with a USB‑C OTG adapter. PocketPad detects it automatically and forwards its buttons and sticks alongside the touch controls.\n\nIMPORTANT after updating to 2.2: un-pair PocketPad on your TV and pair again. A TV memorises what a controller can do when it first pairs, so the new analog triggers and corrected button numbering only take effect after a fresh pairing.\n\nXbox Cloud Gaming: switch “Controller style” to Xbox so the buttons read A/B/X/Y. The signals are identical either way — the host reads them by position (bottom/right/left/top), so only the labels change.\n\nStart / Select: on the PlayStation style these are OPTIONS and SHARE; on the Xbox style they are MENU and VIEW.\n\nTip: switch to Super Nintendo, NES or Game Boy for retro games — same connection, different pad.</string>
     <string name="no_paired_devices">No paired devices yet. Pair first: tap “Make phone discoverable”, then pair from the TV/tablet/PC.</string>
@@ -114,7 +120,16 @@
     <string name="sheet_sub_connect">Pick a paired TV or PC</string>
     <string name="sheet_sub_discoverable">So a TV or PC can pair with it</string>
     <string name="sheet_tv_menu_keys">TV menu keys</string>
+    <!--
+      Row label for the keyboard-mode picker. Kept to two short words: the settings list gives
+      the label one line and ellipsizes the rest, so anything longer loses its tail.
+    -->
+    <string name="sheet_keyboard_mode">Keyboard keys</string>
     <string name="sheet_sub_tv_menu_keys">For menus, not for games</string>
+    <!-- Values shown on the right of that row. One word each, for the same reason. -->
+    <string name="sheet_keys_off">Off</string>
+    <string name="sheet_keys_tv">TV menus</string>
+    <string name="sheet_keys_pc">PC keys</string>
     <string name="sheet_badge_update">NEW</string>
     <!-- Short style names: the full ones ("PlayStation (PS4 / PS5)") do not fit on a row. -->
     <string name="sheet_style_ps">PlayStation</string>

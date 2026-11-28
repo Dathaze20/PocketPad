@@ -37,6 +37,8 @@ import com.dathaze.pocketpad.hid.BluetoothReadiness
 import com.dathaze.pocketpad.hid.GamepadState
 import com.dathaze.pocketpad.hid.HidConstants
 import com.dathaze.pocketpad.hid.HidGamepadManager
+import com.dathaze.pocketpad.hid.KeyboardMode
+import com.dathaze.pocketpad.hid.PcKeyMap
 import com.dathaze.pocketpad.ui.ControlScale
 import com.dathaze.pocketpad.ui.BackgroundImage
 import com.dathaze.pocketpad.ui.ControllerView
@@ -95,7 +97,9 @@ class MainActivity : AppCompatActivity(),
      * Off by default: while a game is running those keys are duplicate input,
      * and Escape in particular is read as "quit" by cloud gaming clients.
      */
-    private var tvNavigation = false
+    private var keyboardMode = KeyboardMode.OFF
+
+    /** True while the original TV menu keys are the active mapping. */
 
     /**
      * Physical controller input, kept per device so one disconnecting drops
@@ -391,7 +395,12 @@ class MainActivity : AppCompatActivity(),
             "LIGHT" -> Haptics.Level.LIGHT
             else -> Haptics.Level.STRONG
         }
-        tvNavigation = prefs.getBoolean(PREF_TV_NAV, false)
+        // PREF_TV_NAV is still read so an upgrade keeps whatever the user last chose; see
+        // KeyboardMode.fromPrefs. Nothing can land on PC Keys without having picked it.
+        keyboardMode = KeyboardMode.fromPrefs(
+            prefs.getString(KeyboardMode.PREF, null),
+            prefs.getBoolean(PREF_TV_NAV, false),
+        )
     }
 
     /**
@@ -467,7 +476,13 @@ class MainActivity : AppCompatActivity(),
             }
         )
 
-        override fun tvMenuKeysOn(): Boolean = tvNavigation
+        override fun keyboardModeLabel(): String = getString(
+            when (keyboardMode) {
+                KeyboardMode.OFF -> R.string.sheet_keys_off
+                KeyboardMode.TV -> R.string.sheet_keys_tv
+                KeyboardMode.PC -> R.string.sheet_keys_pc
+            }
+        )
 
         override fun pendingUpdateLabel(): String? = updateNotice.pendingUpdateLabel()
 
@@ -477,7 +492,7 @@ class MainActivity : AppCompatActivity(),
         override fun onChooseStyle() = showSkinPicker()
         override fun onMoveButtons() = startLayoutEdit()
         override fun onChooseVibration() = showHapticsPicker()
-        override fun onToggleTvMenuKeys() = toggleTvNavigation()
+        override fun onChooseKeyboardMode() = showKeyboardModePicker()
         override fun onBackgroundPicture() = showBackgroundMenu()
         override fun onCheckForUpdates() = checkForUpdates()
         override fun onBluetoothSettings() {
@@ -819,14 +834,49 @@ class MainActivity : AppCompatActivity(),
             .show()
     }
 
-    private fun toggleTvNavigation() {
-        tvNavigation = !tvNavigation
-        getPreferences(MODE_PRIVATE).edit().putBoolean(PREF_TV_NAV, tvNavigation).apply()
-        if (!tvNavigation) hidManager.sendKey(HidConstants.KEY_NONE)
+    /**
+     * Pick which keyboard mapping rides alongside the gamepad reports.
+     *
+     * Three choices rather than the old on/off switch, because PC Keys is a third mapping and
+     * not a variation of TV Keys — see [KeyboardMode]. The order matches the enum so the
+     * selected index maps straight onto it.
+     */
+    private fun showKeyboardModePicker() {
+        val modes = KeyboardMode.entries.toTypedArray()
+        val labels = arrayOf(
+            getString(R.string.keys_mode_off),
+            getString(R.string.keys_mode_tv),
+            getString(R.string.keys_mode_pc),
+        )
+        AlertDialog.Builder(this)
+            .setTitle(R.string.sheet_keyboard_mode)
+            .setSingleChoiceItems(labels, modes.indexOf(keyboardMode)) { dialog, which ->
+                dialog.dismiss()
+                setKeyboardMode(modes[which])
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    private fun setKeyboardMode(mode: KeyboardMode) {
+        if (mode == keyboardMode) return
+        keyboardMode = mode
+        getPreferences(MODE_PRIVATE).edit()
+            .putString(KeyboardMode.PREF, mode.storedValue)
+            // Kept in step so a downgrade to a build that only knows the boolean still behaves.
+            .putBoolean(PREF_TV_NAV, mode == KeyboardMode.TV)
+            .apply()
+        // Whatever the old mode was holding must be let go here: once the mode has changed,
+        // nothing left will ever send the release for it.
+        hidManager.releaseAllKeys()
         Toast.makeText(
             this,
-            if (tvNavigation) R.string.tv_nav_enabled else R.string.tv_nav_disabled,
-            Toast.LENGTH_SHORT
+            when (mode) {
+                KeyboardMode.OFF -> R.string.tv_nav_disabled
+                KeyboardMode.TV -> R.string.tv_nav_enabled
+                KeyboardMode.PC -> R.string.pc_keys_enabled
+            },
+            Toast.LENGTH_LONG
         ).show()
     }
 
@@ -987,13 +1037,18 @@ class MainActivity : AppCompatActivity(),
         if (!::hidManager.isInitialized) return
         GamepadState.merge(controllerView.touchState, externalState, mergedState)
         hidManager.send(mergedState)
-        if (tvNavigation) hidManager.sendKey(navKeyFor(mergedState))
+        when (keyboardMode) {
+            KeyboardMode.OFF -> Unit
+            KeyboardMode.TV -> hidManager.sendKey(navKeyFor(mergedState))
+            KeyboardMode.PC -> hidManager.sendKeyReport(PcKeyMap.reportFor(mergedState))
+        }
     }
 
     /**
      * Keyboard equivalent of the current state, so the pad can drive TV menus
      * when the user asks for it: d-pad → arrow keys, ✕/A → Enter, ○/B → Back.
-     * This is deliberately opt-in — see [tvNavigation].
+     * This is deliberately opt-in — see [KeyboardMode.TV]. Unchanged by PC Keys: the mapping,
+     * the single-key report and the queue behind it are all exactly as they were.
      */
     private fun navKeyFor(state: GamepadState): Byte = when {
         state.isPressed(HidConstants.BTN_CROSS) -> HidConstants.KEY_ENTER
@@ -1198,7 +1253,8 @@ class MainActivity : AppCompatActivity(),
         statusView.text = getString(R.string.status_connected, name)
         statusView.setTextColor(STATUS_CONNECTED)
         controllerView.linkState = ControllerView.LinkState.CONNECTED
-        if (!tvNavigation) hidManager.sendKey(HidConstants.KEY_NONE)
+        // A fresh link starts with nothing held, whichever mapping is active.
+        hidManager.releaseAllKeys()
         device?.let {
             getPreferences(MODE_PRIVATE).edit()
                 .putString(PREF_LAST_DEVICE, it.address)

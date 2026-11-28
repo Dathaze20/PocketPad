@@ -60,11 +60,21 @@ class SettingsSheetCompletenessTest {
         }
     }
 
+    /**
+     * The keyboard-keys row survived gaining a third choice.
+     *
+     * It was a switch while the only options were TV menu keys on and off. PC Keys makes three,
+     * which a switch cannot express, so it became a value row with a picker — the same shape as
+     * Style and Vibration. What must not happen is the row quietly disappearing, or TV menus
+     * ceasing to be one of the things it can select.
+     */
     @Test
-    fun tvMenuKeysSurvivedAsAToggle() {
-        assertTrue("row missing", sheet.contains("R.string.sheet_tv_menu_keys"))
-        assertTrue("not wired", activity.contains("toggleTvNavigation"))
-        assertTrue("not shown as a switch", sheet.contains("switchOn = host.tvMenuKeysOn()"))
+    fun keyboardKeysSurvivedAsAModeChoice() {
+        assertTrue("row missing", sheet.contains("R.string.sheet_keyboard_mode"))
+        assertTrue("no value shown", sheet.contains("value = host.keyboardModeLabel()"))
+        assertTrue("not wired", activity.contains("showKeyboardModePicker"))
+        assertTrue("TV menus is no longer selectable", activity.contains("KeyboardMode.TV"))
+        assertTrue("PC keys is not selectable", activity.contains("KeyboardMode.PC"))
     }
 
     @Test
@@ -80,7 +90,9 @@ class SettingsSheetCompletenessTest {
         val declared = Regex("""fun (on[A-Z]\w*)\(""").findAll(sheet).map { it.groupValues[1] }.toSet()
         val expected = setOf(
             "onConnectToPaired", "onMakeDiscoverable", "onDisconnect",
-            "onChooseStyle", "onMoveButtons", "onChooseVibration", "onToggleTvMenuKeys",
+            // onToggleTvMenuKeys became onChooseKeyboardMode when the row gained a third
+            // option; the row is still there and still reached, it just picks instead of flips.
+            "onChooseStyle", "onMoveButtons", "onChooseVibration", "onChooseKeyboardMode",
             "onBackgroundPicture",
             "onCheckForUpdates", "onBluetoothSettings", "onHelp",
         )
@@ -181,7 +193,7 @@ class SettingsSheetCompletenessTest {
     fun noRowLabelEndsInAnEllipsis() {
         val labelled = Regex("""R\.string\.(\w+)""").findAll(sheet)
             .map { it.groupValues[1] }
-            .filter { it.startsWith("action_") || it == "sheet_tv_menu_keys" }
+            .filter { it.startsWith("action_") || it == "sheet_keyboard_mode" }
             .distinct()
         labelled.forEach { name ->
             val value = Regex("""<string name="$name">(.*?)</string>""")

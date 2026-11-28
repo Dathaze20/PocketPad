@@ -106,7 +106,7 @@ Six styles, switchable from the ⚙ menu. Every style drives the **same** HID re
 
 | Style | Labels |
 |---|---|
-| **PlayStation (PS4 / PS5)** | △ ○ ✕ □, L1/L2/R1/R2, L3/R3, SHARE / OPTIONS / PS |
+| **PlayStation (PS4 / PS5)** | △ ○ ✕ □, L1/L2/R1/R2 drawn as rounded bars like a DualShock's shoulders, L3/R3, SHARE / OPTIONS / PS |
 | **Xbox** | A / B / X / Y, LB/LT/RB/RT, LS/RS, VIEW / MENU — with the offset Xbox stick-and-d-pad arrangement |
 | **Super Nintendo** | X / A / B / Y in SNES colours, L / R, SELECT / START |
 | **NES** | B / A, SELECT / START |
@@ -145,7 +145,12 @@ here, and the quick slots are numbered rather than showing your actual items.
 - **Move buttons** — drag any control anywhere on screen, then **Save**. Layouts are stored **per style and per orientation**, so a custom landscape PlayStation layout does not disturb the portrait one. **Default** restores the built-in layout; **Cancel** discards edits.
 - **Background picture** — pick any image through Android's system photo picker (no storage permission required). The image is copied into app storage, downsampled to roughly screen resolution before decoding, then drawn *beneath* the controls with a dark scrim between, so no photo can obscure a button. Drag to frame it; the framing is remembered.
 - **Vibration level** — Strong / Light / Off.
-- **TV menu keys** — an opt-in mode, **off by default**, in which the pad additionally sends keyboard keys (arrows, Enter, Escape) so it can drive a TV's menus. It is off by default because while a game is running those keys are duplicate input, and Escape is read as "quit" by some clients.
+- **Keyboard keys** — an opt-in mode, **off by default**, in which the pad additionally sends keyboard keys alongside the gamepad reports. Three settings:
+  - **Off** — pure gamepad. The right choice whenever the host reads the controller properly, which includes Windows and emulators that take DirectInput.
+  - **TV menus** — arrows, Enter and Escape, one key at a time, for driving a TV's menus.
+  - **PC keys (experimental)** — every control on its own key, up to six held at once, diagonals included: ✕ `Z`+`Enter`, ○ `X`, □ `A`, △ `S`, L1 `Q`, R1 `W`, L2 `E`, R2 `R`, SHARE Right Shift, OPTIONS `Enter`, L3 `C`, R3 `V`, PS `Escape`, d-pad and left stick arrows. For Windows software that reads only a keyboard, and for driving the desktop.
+
+  Keep it **Off** while playing through the gamepad: with a keyboard mode on, every press arrives twice by two different routes.
 
 ### Connection
 
@@ -283,18 +288,20 @@ Publishing to Google Play is documented step by step in **[docs/PLAY_STORE_CHECK
 
 - **Android 9 (API 28) or newer.** `BluetoothHidDevice` does not exist before that, which sets the floor.
 - A phone whose Bluetooth stack actually implements the **HID Device** profile. The API is standard, but support is ultimately up to the OEM's stack, so this is worth confirming on an unfamiliar device.
-- A host that accepts standard Bluetooth HID controllers. Confirmed working on a Samsung Tizen TV. Windows 10/11, Android tablets and other HID hosts are **supported by design but not verified on hardware** — see the note on PCs below.
+- A host that accepts standard Bluetooth HID controllers. Confirmed working on a Samsung Tizen TV, and on **Windows 10**, where it appears in `joy.cpl` as "PocketPad Controller — OK" and its keyboard collection types into any application. Windows 11, Android tablets and other HID hosts are **supported by design but not verified on hardware** — see the note on PCs below.
 - USB passthrough additionally needs a **data-capable** USB-C OTG adapter; charge-only cables will not work, and the DualShock 3 draws bus power.
 
 **Limitations to be aware of**
 
 - **Pair from the host's input-device list.** Selecting the phone from an audio/Bluetooth-speaker menu attempts the wrong kind of connection.
-- **On a PC, the phone has to open the connection.** Windows pairs the phone as a *phone* — its Class of Device says so, and Android does not let an app change that — so it never goes looking for a controller service on it. Pairing alone therefore does nothing visible. After pairing, use **Settings → Connect to a paired device** in PocketPad and pick the PC; that outbound connection is what makes the host enumerate the HID device. The same applies to tablets and anything else that treats a phone as a phone.
+- **On a PC, the phone has to open the connection.** Windows pairs the phone as a *phone* — its Class of Device says so, and Android does not let an app change that — so pairing alone does nothing visible and the PC will not go looking. After pairing, use **Settings → Connect to a paired device** in PocketPad and pick the PC; that outbound connection is what makes the host enumerate the HID device. The same applies to tablets and anything else that treats a phone as a phone.
+- **Windows files the phone under "Mouse, keyboard, & pen", which is misleading.** That heading describes the parent Bluetooth device, not what was enumerated from it. Windows parses the whole report descriptor and creates **both** children — a game controller *and* a keyboard. Check `joy.cpl` (Win+R), not the Settings page: that is where "PocketPad Controller" appears, with a Properties page that lights up buttons and moves the axes as you press them.
+- **An emulator will not find it until you point it at the joypad.** Nothing auto-binds. In Snes9x and most others, open the input configuration and assign from the **joypad** section rather than the keyboard one. Binding on the keyboard side is harder than it looks, because Windows auto-repeats a held key and the configuration dialog then races through every slot at once; the joypad side does not repeat.
 - **Hosts cache a controller's capabilities at pairing time.** After an update that changes the HID descriptor — analog triggers were added in 2.2 — an already-paired host must be un-paired and paired again before it sees the new capabilities.
 - **The Bluetooth HID Device role is exclusive.** Another app claiming it will drop PocketPad's registration; the app re-registers automatically, but only one HID-device app can hold the role at a time.
 - **Not every host application accepts gamepad input**, even when the pairing itself succeeds.
 - **PocketPad is a standard HID gamepad, not an Xbox/XInput controller.** Windows games that only read XInput will not see it, however well the Bluetooth side works; that is a property of the game, not of the pairing, and no Bluetooth change can alter it. Games and emulators that read DirectInput/raw HID do see it.
-- **TV menu keys are off by default** and should stay off while playing: with them on, ✕/A also sends Enter and ○/B also sends Escape, which some clients read as a request to quit.
+- **Keyboard keys are off by default** and should stay off while playing through the gamepad: with a keyboard mode on, every press arrives twice, once as a gamepad button and once as a keystroke. On **TV menus**, ✕/A also sends Enter and ○/B also sends Escape, which some clients read as a request to quit.
 - **Sideloaded installs trigger Play Protect**, and builds signed with a different key than an existing install cannot replace it — see [docs/INSTALL.md](docs/INSTALL.md).
 - **Bluetooth input latency depends on the host, the radio environment and distance.** No timing figures are claimed here because none have been measured for this project.
 - Hardware behaviour — pairing, per-game input handling, USB OTG — can only be confirmed on real devices. Continuous integration proves the project compiles, not that a given TV will accept it.
