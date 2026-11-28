@@ -125,7 +125,8 @@ class TvKeysUnchangedTest {
         assertTrue("the descriptor should be non-empty", descriptor.isNotEmpty())
         // Report Count (6) followed by Report Size (8) in the keyboard collection.
         val bytes = descriptor.toList()
-        val pattern = listOf<Byte>(0x95, 0x06, 0x75, 0x08)
+        // 0x95 is 149, past Byte's range, so each needs converting rather than written raw.
+        val pattern = listOf(0x95.toByte(), 0x06.toByte(), 0x75.toByte(), 0x08.toByte())
         assertTrue(
             "the keyboard collection should still declare six 8-bit key slots",
             (0..bytes.size - pattern.size).any { i -> bytes.subList(i, i + pattern.size) == pattern },
